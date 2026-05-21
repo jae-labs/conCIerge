@@ -1,6 +1,6 @@
 locals {
   repos = {
-    "opsy" = {
+    "conCIerge" = {
       description    = "A Slack Bot written in GoLang that provisions resources, manages access, and automates workflows across various platforms via Terraform."
       visibility     = "public"
       has_issues     = true
@@ -60,7 +60,7 @@ locals {
       branch_protection      = null
     }
     "pages" = {
-      description       = "Just Another Engineer website. Built with Docusaurus and deployed on GitHub Pages."
+      description       = "Just Another Engineer website."
       visibility        = "public"
       has_issues        = true
       has_discussions   = true
@@ -68,7 +68,7 @@ locals {
       has_projects      = true
       homepage_url      = "http://justanother.engineer/"
       default_branch    = "main"
-      topics            = ["cheatsheets", "docs", "documentation", "docusaurus", "markdown"]
+      topics            = []
       team_access       = { "Maintainers" = "admin" }
       branch_protection = null
       pages = {
@@ -98,8 +98,8 @@ locals {
       branch_protection = null
     }
     "scripts" = {
-      description       = "Collection of utility scripts."
-      visibility        = "private"
+      description       = "Collection of handy utility scripts."
+      visibility        = "public"
       has_issues        = true
       has_wiki          = false
       default_branch    = "main"
