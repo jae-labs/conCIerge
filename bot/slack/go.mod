@@ -7,7 +7,7 @@ require (
 	github.com/google/go-github/v68 v68.0.0
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/joho/godotenv v1.5.1
-	github.com/slack-go/slack v0.18.0
+	github.com/slack-go/slack v0.23.1
 	github.com/zclconf/go-cty v1.13.0
 )
 
