@@ -1,0 +1,61 @@
+name: "Terraform OCI Apply"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "iac/terraform/oci/**"
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: terraform-apply-${{ github.repository }}-iac/terraform/oci
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: iac/terraform/oci
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # ratchet:hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~> 1.5"
+
+      - name: GCP credentials
+        run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/gcp-sa-key.json
+
+      - name: OCI private key
+        run: |
+          printf '%s' "$OCI_PRIVATE_KEY" > /tmp/oci-api-key.pem
+          chmod 600 /tmp/oci-api-key.pem
+        env:
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
+      - name: Terraform init
+        run: terraform init
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa-key.json
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa-key.json
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY_PATH: /tmp/oci-api-key.pem
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_availability_domain: ${{ secrets.OCI_AVAILABILITY_DOMAIN }}
+          TF_VAR_compartment_id: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          TF_VAR_ssh_authorized_keys: ${{ secrets.OCI_SSH_AUTHORIZED_KEYS }}
+          TF_VAR_ssh_ingress_cidr: ${{ secrets.OCI_SSH_INGRESS_CIDR }}
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/gcp-sa-key.json /tmp/oci-api-key.pem

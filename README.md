@@ -15,6 +15,7 @@ flowchart LR
     I --> GH[GitHub org]
     I --> CF[Cloudflare DNS]
     I --> DP[Doppler secrets]
+    I --> OCI[Oracle Cloud instance]
 ```
 
 ### Request lifecycle
@@ -46,6 +47,7 @@ iac/terraform/
   github/            # GitHub org root module
   cloudflare/        # Cloudflare DNS root module
   doppler/           # Doppler secrets root module
+  oci/               # Oracle Cloud root module
   modules/           # Reusable Terraform modules
   docs/              # Terraform documentation
   scripts/           # Bootstrap scripts
@@ -55,7 +57,7 @@ iac/terraform/
 
 **[conCierge Slack Bot](bot/slack/)** — Go bot using the Slack Events API. Uses Socket Mode (WebSocket) for development, HTTP event subscriptions for production. Handles self-service workflows (repo CRUD, DNS records, org settings) via thread-keyed state machine and Block Kit modals. Produces PRs against the IaC in this repo, posts request summaries to `#concierge`, and records manager/admin approvals via reactions.
 
-**[Terraform IaC](iac/terraform/)** — Three root modules managing the `jae-labs` GitHub org, Cloudflare DNS, and Doppler secrets. Remote state in GCS. Reusable modules under `modules/` (github, cloudflare, doppler).
+**[Terraform IaC](iac/terraform/)** — Four root modules managing the `jae-labs` GitHub org, Cloudflare DNS, Doppler secrets, and OCI infrastructure. Remote state in GCS. Reusable modules live under `modules/` for GitHub, Cloudflare, and Doppler; OCI is a flat root module under `oci/`.
 
 ## CI/CD
 
