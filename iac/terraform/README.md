@@ -1,6 +1,6 @@
 # Terraform
 
-IaC for managing the [jae-labs](https://github.com/jae-labs) GitHub organization, Cloudflare DNS, and Doppler secrets.
+IaC for managing the [jae-labs](https://github.com/jae-labs) GitHub organization, Cloudflare DNS, Doppler secrets, and OCI infrastructure.
 
 ## Architecture
 
@@ -10,6 +10,7 @@ flowchart TD
         GH[github/]
         CF[cloudflare/]
         DP[doppler/]
+        OCI[oci/]
     end
     subgraph Reusable Modules
         MGH[modules/github/]
@@ -25,9 +26,10 @@ flowchart TD
     GH -.->|prefix: github/| GCS
     CF -.->|prefix: cloudflare/| GCS
     DP -.->|prefix: doppler/| GCS
+    OCI -.->|prefix: oci/| GCS
 ```
 
-Each root module has independent state stored in GCS with per-module prefix. No cross-module dependencies.
+Each root module has independent state stored in GCS with per-module prefix. No cross-module dependencies. The OCI root module is intentionally flat and self-contained; it does not use `modules/oci/`.
 
 ## Documentation
 
@@ -36,6 +38,7 @@ Each root module has independent state stored in GCS with per-module prefix. No 
 | [GitHub Module](docs/github-module.md) | Org members, teams, repos, branch protection, environments |
 | [Cloudflare Module](docs/cloudflare-module.md) | DNS zones, records, account members |
 | [Doppler Module](docs/doppler-module.md) | Projects, environments, groups, access grants |
+| [OCI Module](docs/oci-module.md) | VCN, public subnet, security rules, and OCI compute instances |
 | [CI/CD](docs/ci-cd.md) | GitHub Actions workflows, secrets, SHA ratcheting |
 | [Bootstrap](docs/bootstrap.md) | One-time GCS backend setup |
 
@@ -45,6 +48,8 @@ Each root module has independent state stored in GCS with per-module prefix. No 
 - `GITHUB_TOKEN` env var (fine-grained PAT with org admin + repo admin + members read/write)
 - `CLOUDFLARE_API_TOKEN` env var (API token with zone/DNS edit permissions)
 - `DOPPLER_TOKEN` env var (personal token from Doppler account settings)
+- OCI provider env vars: `OCI_TENANCY_OCID`, `OCI_USER_OCID`, `OCI_FINGERPRINT`, `OCI_REGION`, `OCI_PRIVATE_KEY_PATH`
+- OCI stack vars: `TF_VAR_compartment_id`, `TF_VAR_availability_domain`, `TF_VAR_ssh_authorized_keys`, `TF_VAR_ssh_ingress_cidr` (`TF_VAR_availability_domain` must be the exact tenancy-prefixed OCI AD name)
 - `GOOGLE_APPLICATION_CREDENTIALS` pointing to a GCP service account key for GCS backend
 
 ## Usage
@@ -70,6 +75,12 @@ cd doppler
 terraform init
 terraform plan
 terraform apply
+
+# oci
+cd oci
+terraform init
+terraform plan
+terraform apply
 ```
 
 ## Adding a repo
@@ -78,4 +89,4 @@ The conCierge bot automates repo creation via Slack. For manual additions, edit 
 
 ## CI/CD
 
-Merges to `main` trigger path-filtered `terraform apply` via GitHub Actions. Each root module has a dedicated workflow (`github-apply.yml`, `cloudflare-apply.yml`, `doppler-apply.yml`) calling a shared `terraform-reusable.yml`. Workflows live in `.github/workflows/` at the repo root and use a `production` environment with protected secrets.
+Merges to `main` trigger path-filtered `terraform apply` via GitHub Actions. GitHub, Cloudflare, and Doppler use the shared `terraform-reusable.yml`; OCI uses a dedicated `oci-apply.yml` because it needs multiple OCI auth and stack-input secrets. Workflows live in `.github/workflows/` at the repo root and use a `production` environment with protected secrets.

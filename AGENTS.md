@@ -4,7 +4,7 @@
 
 Monorepo for two systems with a hard file-path contract between them:
 
-1. **Terraform IaC** (`iac/terraform/`) — manages GitHub org, Cloudflare DNS, Doppler secrets via three root modules and reusable modules (github, cloudflare, doppler).
+1. **Terraform IaC** (`iac/terraform/`) — manages GitHub org, Cloudflare DNS, Doppler secrets, and OCI infrastructure via four root modules. Reusable modules exist for GitHub, Cloudflare, and Doppler; OCI is a flat root module.
 2. **conCierge Slack Bot** (`bot/slack/`) — Go bot that opens PRs mutating terraform locals files, posts request summaries to `#concierge`, and records manager/admin approvals via reactions.
 
 ## Cross-system contract
@@ -31,6 +31,7 @@ Workflows live in `.github/workflows/`. Triggering is path-based:
 - `iac/terraform/github/**` or `iac/terraform/modules/github/**` triggers `github-apply.yml`.
 - `iac/terraform/cloudflare/**` or `iac/terraform/modules/cloudflare/**` triggers `cloudflare-apply.yml`.
 - `iac/terraform/doppler/**` or `iac/terraform/modules/doppler/**` triggers `doppler-apply.yml`.
+- `iac/terraform/oci/**` triggers `oci-apply.yml`.
 
 ## Agent rules
 

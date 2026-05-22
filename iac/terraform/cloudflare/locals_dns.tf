@@ -8,6 +8,13 @@ locals {
         proxied = true
         comment = "Home Assistant"
       }
+      "oci-a" = {
+        type    = "A"
+        name    = "oci"
+        content = "144.21.38.6"
+        proxied = false
+        comment = "OCI instance"
+      }
       "root-a-1" = {
         type    = "A"
         name    = "justanother.engineer"

@@ -1,12 +1,13 @@
-# Terraform IaC — jae-labs GitHub Org
+# Terraform IaC — jae-labs infrastructure
 
-Root modules: `github/`, `cloudflare/`, `doppler/`. Reusable modules: `modules/github/`, `modules/cloudflare/`, `modules/doppler/`. State in GCS bucket `gh-jae-labs-terraform`; each root module has its own state prefix. Terraform >= 1.5. CI auto-applies on merge to main, path-filtered per module. Action SHAs are ratchet-pinned in workflows.
+Root modules: `github/`, `cloudflare/`, `doppler/`, `oci/`. Reusable modules: `modules/github/`, `modules/cloudflare/`, `modules/doppler/`. OCI is a flat root module with no reusable submodule yet. State in GCS bucket `gh-jae-labs-terraform`; each root module has its own state prefix. Terraform >= 1.5. CI auto-applies on merge to main, path-filtered per module. Action SHAs are ratchet-pinned in workflows.
 
 ## Structure
 
 - `github/` — org settings, members, teams, repos, branch protection, environments
 - `cloudflare/` — DNS records, zone members
 - `doppler/` — secrets management (projects, environments, groups)
+- `oci/` — flat OCI root module (VCN, subnet, security rules, compute instance)
 - `modules/github/` — reusable GitHub module (org settings, membership, teams, repos, branch protection, environments)
 - `modules/cloudflare/` — reusable Cloudflare module (zones, DNS records, account members)
 - `modules/doppler/` — reusable Doppler module (projects, environments, groups)
@@ -39,6 +40,7 @@ Module docs live in `docs/`:
 | [GitHub Module](docs/github-module.md) | Org members, teams, repos, branch protection, environments |
 | [Cloudflare Module](docs/cloudflare-module.md) | DNS zones, records, account members |
 | [Doppler Module](docs/doppler-module.md) | Projects, environments, groups, access grants |
+| [OCI Module](docs/oci-module.md) | VCN, subnet, security rules, compute instance |
 | [CI/CD](docs/ci-cd.md) | GitHub Actions workflows, secrets, SHA ratcheting |
 | [Bootstrap](docs/bootstrap.md) | One-time GCS backend setup |
 
