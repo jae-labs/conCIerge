@@ -2,7 +2,7 @@ locals {
   repos = {
     "conCIerge" = {
       description                 = "A Slack Bot written in GoLang that provisions resources, manages access, and automates workflows across various platforms via Terraform."
-      visibility                  = "public"
+      visibility                  = "private"
       has_issues                  = true
       vulnerability_alerts        = true
       dependabot_security_updates = true
@@ -15,7 +15,6 @@ locals {
         dismiss_stale_reviews           = true
         require_linear_history          = true
         require_conversation_resolution = true
-        force_push_bypassers            = ["/luiz1361"]
       }
       security_and_analysis = {
         secret_scanning                 = { status = "enabled" }
