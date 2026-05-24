@@ -1,0 +1,4 @@
+setup:
+  - project: concierge
+    config: dev
+    path: .

@@ -1,0 +1,29 @@
+concierge_service_name: concierge
+concierge_user: concierge
+concierge_group: concierge
+
+concierge_install_dir: /opt/concierge
+concierge_binary_path: "{{ concierge_install_dir }}/concierge"
+concierge_state_dir: /var/lib/concierge
+
+concierge_config_dir: /etc/concierge
+concierge_env_path: "{{ concierge_config_dir }}/concierge.env"
+concierge_service_unit_path: "/etc/systemd/system/{{ concierge_service_name }}.service"
+
+concierge_src_dir: "{{ playbook_dir }}/../../src"
+concierge_build_package: ./cmd/concierge
+concierge_goos: linux
+concierge_goarch: amd64
+concierge_cgo_enabled: "0"
+concierge_prebuilt_binary_path: ""
+
+concierge_env_defaults: {}
+concierge_env: {}
+concierge_required_env_vars:
+  - SLACK_BOT_TOKEN
+  - SLACK_REQUESTS_CHANNEL_ID
+  - GITHUB_APP_ID
+  - GITHUB_APP_INSTALLATION_ID
+  - GITHUB_APP_PRIVATE_KEY
+  - GITHUB_OWNER
+  - GITHUB_REPO

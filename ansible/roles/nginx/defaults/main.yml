@@ -1,0 +1,2 @@
+nginx_package: nginx
+nginx_certbot_webroot: /var/www/certbot

@@ -1,0 +1,16 @@
+- name: Ensure SSH drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ ssh_hardening_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy SSH hardening drop-in
+  ansible.builtin.template:
+    src: ssh-hardening.conf.j2
+    dest: "{{ ssh_hardening_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload ssh hardening

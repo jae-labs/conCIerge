@@ -1,0 +1,21 @@
+[Unit]
+Description=conCIerge Slack bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ concierge_user }}
+Group={{ concierge_group }}
+WorkingDirectory={{ concierge_state_dir }}
+EnvironmentFile={{ concierge_env_path }}
+ExecStart={{ concierge_binary_path }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
