@@ -1,0 +1,66 @@
+name: "Terraform OCI Apply"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/oci/**"
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: terraform-apply-${{ github.repository }}-terraform/oci
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: terraform/oci
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # ratchet:hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~> 1.5"
+
+      - name: GCP credentials
+        run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/gcp-sa-key.json
+
+      - name: OCI private key
+        run: |
+          printf '%s' "$OCI_PRIVATE_KEY" > /tmp/oci-api-key.pem
+          chmod 600 /tmp/oci-api-key.pem
+        env:
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
+      - name: Terraform init
+        run: terraform init
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa-key.json
+
+      - name: Terraform plan/apply
+        run: |
+          set -euo pipefail
+          plan_file="$(mktemp "${TMPDIR:-/tmp}/terraform-plan.XXXXXX")"
+          trap 'rm -f "${plan_file}"' EXIT
+          terraform plan -input=false -no-color -out="${plan_file}" > /dev/null 2>&1
+          terraform apply -input=false -auto-approve "${plan_file}" > /dev/null 2>&1
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa-key.json
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY_PATH: /tmp/oci-api-key.pem
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_OCI_AVAILABILITY_DOMAIN: ${{ secrets.OCI_AVAILABILITY_DOMAIN }}
+          TF_VAR_OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          TF_VAR_OCI_SSH_AUTHORIZED_KEYS: ${{ secrets.OCI_SSH_AUTHORIZED_KEYS }}
+          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR }}
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/gcp-sa-key.json /tmp/oci-api-key.pem

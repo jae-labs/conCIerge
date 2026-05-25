@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: docker.io/n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - N8N_PATH=/n8n/
+      - N8N_EDITOR_BASE_URL=https://{{ fqdn }}/n8n/
+      - WEBHOOK_URL=https://{{ fqdn }}/n8n/
+      - GENERIC_TIMEZONE=UTC
+    volumes:
+      - /var/lib/n8n:/home/node/.n8n

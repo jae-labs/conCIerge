@@ -1,0 +1,188 @@
+- name: Ensure concierge_env is a mapping
+  ansible.builtin.assert:
+    that:
+      - concierge_env is mapping
+    fail_msg: concierge_env must be provided as a key/value mapping of environment variables.
+
+- name: Ensure concierge_env_defaults is a mapping
+  ansible.builtin.assert:
+    that:
+      - concierge_env_defaults is mapping
+    fail_msg: concierge_env_defaults must be provided as a key/value mapping of environment variables.
+
+- name: Determine whether concierge should use a prebuilt binary
+  ansible.builtin.set_fact:
+    concierge_use_prebuilt_binary: "{{ (concierge_prebuilt_binary_path | string | trim | length) > 0 }}"
+
+- name: Merge concierge default and explicit environment variables
+  ansible.builtin.set_fact:
+    concierge_effective_env: "{{ concierge_env_defaults | combine(concierge_env) }}"
+
+- name: Ensure concierge runtime mode is valid
+  ansible.builtin.assert:
+    that:
+      - (concierge_effective_env.SLACK_MODE | default('socket') | lower) in ['socket', 'http']
+    fail_msg: SLACK_MODE must be socket or http.
+
+- name: Ensure required concierge environment variables are present
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env[item] is defined
+      - (concierge_effective_env[item] | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: {{ item }}"
+  loop: "{{ concierge_required_env_vars }}"
+
+- name: Ensure socket mode has an app token
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env.SLACK_APP_TOKEN is defined
+      - (concierge_effective_env.SLACK_APP_TOKEN | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: SLACK_APP_TOKEN"
+  when: (concierge_effective_env.SLACK_MODE | default('socket') | lower) == 'socket'
+
+- name: Ensure http mode has a signing secret
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env.SLACK_SIGNING_SECRET is defined
+      - (concierge_effective_env.SLACK_SIGNING_SECRET | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: SLACK_SIGNING_SECRET"
+  when: (concierge_effective_env.SLACK_MODE | default('socket') | lower) == 'http'
+
+- name: Check provided concierge prebuilt binary path
+  ansible.builtin.stat:
+    path: "{{ concierge_prebuilt_binary_path }}"
+  register: concierge_prebuilt_binary_stat
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  when: concierge_use_prebuilt_binary
+
+- name: Ensure provided concierge prebuilt binary path exists
+  ansible.builtin.assert:
+    that:
+      - concierge_prebuilt_binary_stat.stat.exists
+      - concierge_prebuilt_binary_stat.stat.isreg
+    fail_msg: concierge_prebuilt_binary_path must point to an existing local file.
+  when: concierge_use_prebuilt_binary
+
+- name: Create temporary local build directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: concierge-build-
+  register: concierge_local_build_dir
+  check_mode: false
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  when: not concierge_use_prebuilt_binary
+
+- name: Build concierge binary for the target OCI platform
+  ansible.builtin.command:
+    argv:
+      - go
+      - build
+      - -o
+      - "{{ concierge_local_build_dir.path }}/concierge"
+      - "{{ concierge_build_package }}"
+    chdir: "{{ concierge_src_dir }}"
+  environment:
+    GOOS: "{{ concierge_goos }}"
+    GOARCH: "{{ concierge_goarch }}"
+    CGO_ENABLED: "{{ concierge_cgo_enabled }}"
+  check_mode: false
+  delegate_to: localhost
+  changed_when: true
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  when: not concierge_use_prebuilt_binary
+
+- name: Set concierge binary source path
+  ansible.builtin.set_fact:
+    concierge_binary_source_path: "{{ concierge_prebuilt_binary_path if concierge_use_prebuilt_binary else concierge_local_build_dir.path ~ '/concierge' }}"
+
+- name: Ensure concierge group exists
+  ansible.builtin.group:
+    name: "{{ concierge_group }}"
+    system: true
+
+- name: Ensure concierge user exists
+  ansible.builtin.user:
+    name: "{{ concierge_user }}"
+    group: "{{ concierge_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ concierge_state_dir }}"
+    create_home: false
+
+- name: Ensure concierge install directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure concierge state directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_state_dir }}"
+    state: directory
+    owner: "{{ concierge_user }}"
+    group: "{{ concierge_group }}"
+    mode: "0750"
+
+- name: Ensure concierge config directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install concierge binary
+  ansible.builtin.copy:
+    src: "{{ concierge_binary_source_path }}"
+    dest: "{{ concierge_binary_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart concierge
+
+- name: Render concierge environment file
+  ansible.builtin.template:
+    src: concierge.env.j2
+    dest: "{{ concierge_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart concierge
+
+- name: Install concierge systemd service
+  ansible.builtin.template:
+    src: concierge.service.j2
+    dest: "{{ concierge_service_unit_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart concierge
+
+- name: Ensure concierge service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ concierge_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Remove temporary local build directory
+  ansible.builtin.file:
+    path: "{{ concierge_local_build_dir.path }}"
+    state: absent
+  check_mode: false
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  when: not concierge_use_prebuilt_binary
