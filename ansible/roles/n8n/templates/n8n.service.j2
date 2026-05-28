@@ -1,0 +1,15 @@
+[Unit]
+Description=n8n (Docker Compose)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory={{ n8n_install_dir }}
+ExecStart=/usr/bin/docker compose up --remove-orphans
+ExecStop=/usr/bin/docker compose down
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

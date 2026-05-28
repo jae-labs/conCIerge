@@ -1,0 +1,69 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Go modules
+  - package-ecosystem: "gomod"
+    directory: "/src"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "go"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+  # Terraform - GitHub org management
+  - package-ecosystem: "terraform"
+    directory: "/terraform/github"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "terraform"
+
+  # Terraform - Cloudflare DNS management
+  - package-ecosystem: "terraform"
+    directory: "/terraform/cloudflare"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "terraform"
+
+  # Terraform - Doppler secrets management
+  - package-ecosystem: "terraform"
+    directory: "/terraform/doppler"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "terraform"
+
+  # Terraform - OCI infrastructure
+  - package-ecosystem: "terraform"
+    directory: "/terraform/oci"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "terraform"
+
+  # Python dependencies for Ansible host configuration
+  - package-ecosystem: "pip"
+    directory: "/ansible"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
