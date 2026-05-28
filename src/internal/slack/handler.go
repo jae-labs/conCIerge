@@ -1401,7 +1401,6 @@ func buildRequestSummary(state *conversation.State, prTitle, prURL string) []sla
 		prLabel = "#" + matches[1]
 	}
 	writeBuilderf(&sb, "• *PR:* <%s|%s>\n", prURL, prLabel)
-	sb.WriteString("\n:arrow_right: *Action required* — A manager has to approve by reacting to this top-level message with :thumbsup:")
 
 	section := slack.NewSectionBlock(
 		slack.NewTextBlockObject("mrkdwn", sb.String(), false, false),
