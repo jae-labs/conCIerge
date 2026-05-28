@@ -1,0 +1,11 @@
+fail2ban_service_name: fail2ban
+fail2ban_packages:
+  - fail2ban
+  - python3-systemd
+fail2ban_jail_dir: /etc/fail2ban/jail.d
+fail2ban_sshd_jail_path: "{{ fail2ban_jail_dir }}/sshd.local"
+fail2ban_sshd_backend: systemd
+fail2ban_sshd_banaction: iptables-multiport
+fail2ban_sshd_maxretry: 3
+fail2ban_sshd_findtime: 10m
+fail2ban_sshd_bantime: 1h

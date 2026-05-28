@@ -1,0 +1,56 @@
+- name: Configure OCI host baseline
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Configure baseline system (OS updates, etc.)
+      ansible.builtin.import_role:
+        name: common
+
+    - name: Configure host firewall
+      ansible.builtin.import_role:
+        name: oci_iptables
+
+    - name: Configure SSH hardening
+      ansible.builtin.import_role:
+        name: ssh_hardening
+
+    - name: Configure fail2ban
+      ansible.builtin.import_role:
+        name: fail2ban
+
+    - name: Configure Tailscale
+      ansible.builtin.import_role:
+        name: tailscale
+
+    - name: Configure swapfile
+      ansible.builtin.import_role:
+        name: swapfile
+
+    - name: Configure Docker
+      ansible.builtin.import_role:
+        name: docker
+
+    - name: Configure nginx
+      ansible.builtin.import_role:
+        name: nginx
+
+    - name: Deploy n8n
+      ansible.builtin.import_role:
+        name: n8n
+
+    - name: Apply pending handlers before certificate issuance
+      ansible.builtin.meta: flush_handlers
+
+    - name: Configure certbot
+      ansible.builtin.import_role:
+        name: certbot
+
+    - name: Deploy concierge bot
+      ansible.builtin.import_role:
+        name: concierge
+
+    - name: Deploy Grafana Alloy
+      ansible.builtin.import_role:
+        name: grafana_alloy

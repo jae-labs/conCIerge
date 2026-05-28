@@ -1,0 +1,144 @@
+- name: Certbot installation
+  block:
+    - name: Install Certbot
+      ansible.builtin.apt:
+        name:
+          - certbot
+        state: present
+
+- name: Generate self-signed fallback certificates if no valid certs exist
+  block:
+    - name: Check if certificate file exists
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ fqdn }}/fullchain.pem"
+      register: nginx_certbot_cert_stat
+      when: fqdn is defined
+
+    - name: Check if private key file exists
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ fqdn }}/privkey.pem"
+      register: nginx_certbot_privkey_stat
+      when: fqdn is defined
+
+    - name: Generate self-signed private key if missing
+      ansible.builtin.command:
+        cmd: "openssl genrsa -out /etc/letsencrypt/live/{{ fqdn }}/privkey.pem 2048"
+        creates: "/etc/letsencrypt/live/{{ fqdn }}/privkey.pem"
+      when: fqdn is defined and not nginx_certbot_privkey_stat.stat.exists
+
+    - name: Generate self-signed certificate if missing
+      ansible.builtin.command:
+        cmd: >
+          openssl req -new -x509 -key /etc/letsencrypt/live/{{ fqdn }}/privkey.pem
+          -out /etc/letsencrypt/live/{{ fqdn }}/fullchain.pem -days 365
+          -subj "/CN={{ fqdn }}/O=Self-Signed/C=US"
+        creates: "/etc/letsencrypt/live/{{ fqdn }}/fullchain.pem"
+      when: fqdn is defined and not nginx_certbot_cert_stat.stat.exists
+
+- name: Obtain or renew Let's Encrypt certificate with idempotence
+  block:
+    - name: Get certificate information
+      community.crypto.x509_certificate_info:
+        path: "/etc/letsencrypt/live/{{ fqdn }}/fullchain.pem"
+      register: nginx_certbot_cert_info
+      when: fqdn is defined
+
+    - name: Find all files and directories in Certbot paths
+      ansible.builtin.find:
+        paths:
+          - /etc/letsencrypt/live/
+          - /etc/letsencrypt/archive/
+          - /etc/letsencrypt/renewal/
+        file_type: any
+        recurse: false
+      register: nginx_certbot_files_to_remove
+      when:
+        - fqdn is defined
+        - nginx_certbot_cert_info.issuer == nginx_certbot_cert_info.subject
+
+    - name: Remove all Certbot certificate files and directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ nginx_certbot_files_to_remove.files }}"
+      when:
+        - fqdn is defined
+        - nginx_certbot_cert_info.issuer == nginx_certbot_cert_info.subject
+
+    - name: Request Let's Encrypt certificate if certificate is self-signed or expired
+      ansible.builtin.command:
+        argv:
+          - certbot
+          - certonly
+          - --webroot
+          - --webroot-path
+          - /var/www/certbot
+          - -d
+          - "{{ fqdn }}"
+          - --non-interactive
+          - --agree-tos
+          - --email
+          - "{{ letsencrypt_email }}"
+      when:
+        - fqdn is defined
+        - nginx_certbot_cert_info.issuer == nginx_certbot_cert_info.subject
+      register: nginx_certbot_renewal_result
+      changed_when: "'Successfully received certificate' in nginx_certbot_renewal_result.stdout or 'Skipping' not in nginx_certbot_renewal_result.stdout"
+      tags:
+        - skip_ansible_lint
+
+    - name: Reload nginx after successful certificate renewal
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      when:
+        - nginx_certbot_renewal_result.changed is defined
+        - nginx_certbot_renewal_result.changed | bool
+
+- name: Certificate renewal scheduling with systemd timer
+  block:
+    - name: Create systemd service for certificate renewal
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Renew Let's Encrypt SSL certificates
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/certbot renew --webroot --webroot-path /var/www/certbot --quiet
+          ExecStartPost=/usr/bin/systemctl reload nginx
+          StandardOutput=journal
+          StandardError=journal
+          SyslogIdentifier=certbot-renew
+        dest: /etc/systemd/system/certbot-renew.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Create systemd timer for certificate renewal
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=Renew Let's Encrypt SSL certificates daily
+          Requires=certbot-renew.service
+
+          [Timer]
+          OnCalendar=daily
+          OnCalendar=*-*-* 03:00:00
+          Persistent=true
+          RandomizedDelaySec=3600
+
+          [Install]
+          WantedBy=timers.target
+        dest: /etc/systemd/system/certbot-renew.timer
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd daemon and enable renewal timer
+      ansible.builtin.systemd:
+        name: certbot-renew.timer
+        enabled: true
+        state: started
+        daemon_reload: true

@@ -1,0 +1,96 @@
+- name: Ensure concierge_env is a mapping
+  ansible.builtin.assert:
+    that:
+      - concierge_env is mapping
+    fail_msg: concierge_env must be provided as a key/value mapping of environment variables.
+
+- name: Ensure concierge_env_defaults is a mapping
+  ansible.builtin.assert:
+    that:
+      - concierge_env_defaults is mapping
+    fail_msg: concierge_env_defaults must be provided as a key/value mapping of environment variables.
+
+- name: Merge concierge default and explicit environment variables
+  ansible.builtin.set_fact:
+    concierge_effective_env: "{{ concierge_env_defaults | combine(concierge_env) }}"
+
+- name: Ensure concierge runtime mode is valid
+  ansible.builtin.assert:
+    that:
+      - (concierge_effective_env.SLACK_MODE | default('socket') | lower) in ['socket', 'http']
+    fail_msg: SLACK_MODE must be socket or http.
+
+- name: Ensure required concierge environment variables are present
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env[item] is defined
+      - (concierge_effective_env[item] | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: {{ item }}"
+  loop: "{{ concierge_required_env_vars }}"
+
+- name: Ensure socket mode has an app token
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env.SLACK_APP_TOKEN is defined
+      - (concierge_effective_env.SLACK_APP_TOKEN | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: SLACK_APP_TOKEN"
+  when: (concierge_effective_env.SLACK_MODE | default('socket') | lower) == 'socket'
+
+- name: Ensure http mode has a signing secret
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env.SLACK_SIGNING_SECRET is defined
+      - (concierge_effective_env.SLACK_SIGNING_SECRET | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: SLACK_SIGNING_SECRET"
+  when: (concierge_effective_env.SLACK_MODE | default('socket') | lower) == 'http'
+
+- name: Ensure concierge install directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure concierge config directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Render concierge environment file
+  ansible.builtin.template:
+    src: concierge.env.j2
+    dest: "{{ concierge_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart concierge
+
+- name: Deploy concierge docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ concierge_install_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart concierge
+
+- name: Install concierge systemd service
+  ansible.builtin.template:
+    src: concierge.service.j2
+    dest: "{{ concierge_service_unit_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart concierge
+
+- name: Ensure concierge service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ concierge_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

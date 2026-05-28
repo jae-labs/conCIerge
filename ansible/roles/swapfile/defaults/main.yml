@@ -1,0 +1,3 @@
+swapfile_path: /swapfile
+swapfile_size_mb: 2048
+swapfile_fstab_line: "{{ swapfile_path }} none swap sw 0 0"

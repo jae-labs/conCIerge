@@ -1,0 +1,53 @@
+- name: Ensure apt keyring directory exists
+  ansible.builtin.file:
+    path: "{{ docker_apt_keyring_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Download Docker official GPG key
+  ansible.builtin.get_url:
+    url: "{{ docker_apt_repo_url }}/gpg"
+    dest: "{{ docker_apt_keyring_path }}"
+    mode: "0644"
+
+- name: Add Docker stable APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by={{ docker_apt_keyring_path }}] {{ docker_apt_repo_url }} {{ ansible_facts.distribution_release }} stable"
+    filename: docker
+    state: present
+  register: docker_repository_result
+
+- name: Install Docker and components
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: true
+  register: docker_package_result
+  when: not (ansible_check_mode and docker_repository_result is changed)
+
+- name: Ensure Docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add configured users to docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+  when: docker_users | length > 0
+
+- name: Ensure docker service is enabled and started
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and (docker_repository_result is changed or docker_package_result is changed))
+
+- name: Ensure containerd service is enabled and started
+  ansible.builtin.service:
+    name: containerd
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and (docker_repository_result is changed or docker_package_result is changed))

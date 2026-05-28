@@ -1,0 +1,78 @@
+---
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Grafana GPG key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /etc/apt/keyrings/grafana.key
+    mode: "0644"
+
+- name: Add Grafana APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.key] https://apt.grafana.com stable main"
+    filename: grafana
+    state: present
+
+- name: Install Grafana Alloy  # noqa package-latest
+  ansible.builtin.apt:
+    name: alloy
+    state: latest
+    update_cache: true
+
+- name: Add alloy user to systemd-journal, adm, and docker groups
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - systemd-journal
+      - adm
+      - docker
+    append: true
+  notify: Restart alloy
+
+- name: Ensure alloy config directory exists
+  ansible.builtin.file:
+    path: "{{ grafana_alloy_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render Grafana Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ grafana_alloy_config_path }}"
+    owner: root
+    group: alloy
+    mode: "0640"
+  notify: Restart alloy
+
+- name: Ensure systemd override directory for Grafana Alloy exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/alloy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy systemd override to run Grafana Alloy as root
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/alloy.service.d/user-override.conf
+    content: |
+      [Service]
+      User=root
+      Group=root
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart alloy
+
+- name: Ensure Grafana Alloy service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ grafana_alloy_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
