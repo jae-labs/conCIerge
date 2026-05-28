@@ -1,0 +1,27 @@
+# Lefthook Git Hooks
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    go-fmt:
+      glob: "src/**/*.go"
+      run: gofmt -w {staged_files}
+    go-lint:
+      glob: "src/**/*.go"
+      run: cd src && golangci-lint run --timeout=5m
+    tf-fmt:
+      glob: "terraform/**/*.tf"
+      run: terraform fmt {staged_files}
+    tf-tflint:
+      glob: "terraform/**/*.tf"
+      run: tflint --recursive --chdir=terraform --config="$PWD/terraform/.tflint.hcl"
+    ansible-lint:
+      glob: "ansible/**/*.{yml,yaml}"
+      run: ANSIBLE_ROLES_PATH="$PWD/ansible/roles" ansible-lint -c "$PWD/.ansible-lint"
+
+pre-push:
+  commands:
+    go-test:
+      glob: "src/**/*.go"
+      run: cd src && go test -v -race ./...

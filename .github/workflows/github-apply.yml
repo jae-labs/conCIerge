@@ -1,0 +1,21 @@
+name: "Terraform GitHub Apply"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/github/**"
+      - "terraform/modules/github/**"
+
+jobs:
+  apply:
+    uses: ./.github/workflows/terraform-reusable.yml
+    with:
+      module-path: terraform/github
+      provider-token-name: GITHUB_TOKEN
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      PROVIDER_TOKEN: ${{ secrets.GH_PAT }}

@@ -1,0 +1,14 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+{% if oci_iptables_allow_icmp %}
+-A INPUT -p icmp -j ACCEPT
+{% endif %}
+-A INPUT -p tcp -s {{ oci_iptables_ssh_ingress_cidr }} --dport 22 -j ACCEPT
+{% for port in oci_iptables_allowed_tcp_ports %}
+-A INPUT -p tcp --dport {{ port }} -j ACCEPT
+{% endfor %}
+COMMIT

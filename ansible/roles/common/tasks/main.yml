@@ -1,0 +1,4 @@
+- name: Ensure OS packages are up to date (apt update and dist-upgrade)
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist

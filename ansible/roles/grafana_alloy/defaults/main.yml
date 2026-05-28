@@ -1,0 +1,17 @@
+---
+grafana_alloy_service_name: alloy
+grafana_alloy_config_dir: /etc/alloy
+grafana_alloy_config_path: "{{ grafana_alloy_config_dir }}/config.alloy"
+
+# Grafana Cloud credentials and write endpoints (should be defined in group_vars/all.yml or vault)
+grafana_cloud_prometheus_url: ""
+grafana_cloud_prometheus_username: ""
+grafana_cloud_prometheus_token: ""
+
+grafana_cloud_loki_url: ""
+grafana_cloud_loki_username: ""
+grafana_cloud_loki_token: ""
+
+grafana_cloud_tempo_url: ""
+grafana_cloud_tempo_username: ""
+grafana_cloud_tempo_token: ""

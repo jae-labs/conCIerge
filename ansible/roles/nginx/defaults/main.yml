@@ -1,0 +1,8 @@
+nginx_package: nginx
+nginx_certbot_webroot: /var/www/certbot
+nginx_client_body_buffer_size: "10m"
+nginx_client_header_buffer_size: "1k"
+nginx_large_client_header_buffers: "4 32k"
+nginx_proxy_buffer_size: "32k"
+nginx_proxy_buffers: "16 32k"
+nginx_proxy_busy_buffers_size: "64k"
