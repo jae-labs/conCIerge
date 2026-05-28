@@ -17,10 +17,10 @@
     filename: grafana
     state: present
 
-- name: Install Grafana Alloy
+- name: Install Grafana Alloy  # noqa package-latest
   ansible.builtin.apt:
     name: alloy
-    state: present
+    state: latest
     update_cache: true
 
 - name: Add alloy user to systemd-journal, adm, and docker groups

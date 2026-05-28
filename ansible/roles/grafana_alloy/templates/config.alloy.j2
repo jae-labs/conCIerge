@@ -44,10 +44,12 @@ prometheus.scrape "concierge" {
 }
 
 // 3. Nginx Status metrics
+prometheus.exporter.nginx "nginx" {
+  address = "http://127.0.0.1:8081/metrics"
+}
+
 prometheus.scrape "nginx" {
-  targets = [
-    {"__address__" = "127.0.0.1:8081"},
-  ]
+  targets    = prometheus.exporter.nginx.nginx.targets
   forward_to = [prometheus.relabel.add_instance_label.receiver]
 }
 
