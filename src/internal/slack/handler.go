@@ -157,9 +157,9 @@ func (h *Handler) replyPRCtx(ctx context.Context, state *conversation.State, prT
 
 	var closingText string
 	if link != "" {
-		closingText = fmt.Sprintf("Request submitted: <%s|View your request>\n\n*Next steps:* follow up with your manager to approve the request above following instructions displayed on it.\n\nThis chat has ended. Open a *New Chat* if you need to raise a new request.", link)
+		closingText = fmt.Sprintf("Request submitted: <%s|View your request>.\n\nThis chat has ended. Open a *New Chat* if you need to raise a new request.", link)
 	} else {
-		closingText = fmt.Sprintf("Request submitted to <#%s>.\n\n*Next steps:* follow up with your manager to approve the request above following instructions displayed on it.\n\nThis chat has ended. Open a *New Chat* if you need to raise a new request.", h.requestsChannelID)
+		closingText = fmt.Sprintf("Request submitted to <#%s>.\n\nThis chat has ended. Open a *New Chat* if you need to raise a new request.", h.requestsChannelID)
 	}
 	h.postMessageCtx(ctx, state.ChannelID, "post request closure",
 		slack.MsgOptionText(closingText, false),
