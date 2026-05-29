@@ -7,7 +7,6 @@
 <a href="https://github.com/jae-labs/conCIerge/actions/workflows/release.yml"><img src="https://github.com/jae-labs/conCIerge/actions/workflows/release.yml/badge.svg" alt="Release Status"></a>
 <a href="src/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/jae-labs/conCIerge?filename=src%2Fgo.mod" alt="Go Version"></a>
 <a href="terraform/"><img src="https://img.shields.io/badge/Terraform-%3E%3D%201.5-blueviolet?logo=terraform" alt="Terraform Version"></a>
-<a href="https://goreportcard.com/report/github.com/jae-labs/conCIerge"><img src="https://goreportcard.com/badge/github.com/jae-labs/conCIerge" alt="Go Report Card"></a>
 <a href="LICENSE"><img src="https://img.shields.io/github/license/jae-labs/conCIerge" alt="License"></a>
 </p>
 
