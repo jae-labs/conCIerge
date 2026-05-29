@@ -1,0 +1,18 @@
+n8n_service_name: n8n
+n8n_config_dir: /etc/n8n
+n8n_env_path: "{{ n8n_config_dir }}/n8n.env"
+n8n_install_dir: /opt/n8n
+
+n8n_image: docker.io/n8nio/n8n
+n8n_image_tag: 2.21.7
+
+n8n_env_defaults:
+  N8N_PORT: "5678"
+  N8N_PATH: "/n8n/"
+  N8N_EDITOR_BASE_URL: "https://{{ fqdn }}/n8n/"
+  WEBHOOK_URL: "https://{{ fqdn }}/n8n/"
+  GENERIC_TIMEZONE: "UTC"
+  N8N_PROXY_HOPS: "1"
+  N8N_RUNNERS_GRANT_TOKEN_TTL: "120"
+
+n8n_env: {}

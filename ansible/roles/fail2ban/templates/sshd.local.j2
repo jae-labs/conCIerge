@@ -1,0 +1,10 @@
+# Managed by Ansible: conCIerge fail2ban SSH jail
+[sshd]
+enabled = true
+backend = {{ fail2ban_sshd_backend }}
+filter = sshd
+port = ssh
+banaction = {{ fail2ban_sshd_banaction }}
+maxretry = {{ fail2ban_sshd_maxretry }}
+findtime = {{ fail2ban_sshd_findtime }}
+bantime = {{ fail2ban_sshd_bantime }}

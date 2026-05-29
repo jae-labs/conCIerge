@@ -1,0 +1,13 @@
+- name: Validate ssh configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ ssh_hardening_sshd_binary }}"
+      - -t
+  listen: Reload ssh hardening
+  changed_when: false
+
+- name: Restart ssh service
+  ansible.builtin.service:
+    name: "{{ ssh_hardening_service_name }}"
+    state: restarted
+  listen: Reload ssh hardening

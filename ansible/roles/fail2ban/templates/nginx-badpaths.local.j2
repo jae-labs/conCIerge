@@ -1,0 +1,11 @@
+# Managed by Ansible: conCIerge fail2ban nginx bad paths jail
+[nginx-badpaths]
+enabled = true
+filter = {{ fail2ban_nginx_badpaths_filter_name }}
+backend = {{ fail2ban_nginx_badpaths_backend }}
+logpath = {{ fail2ban_nginx_badpaths_logpath }}
+port = {{ fail2ban_nginx_badpaths_port }}
+banaction = {{ fail2ban_nginx_badpaths_banaction }}
+maxretry = {{ fail2ban_nginx_badpaths_maxretry }}
+findtime = {{ fail2ban_nginx_badpaths_findtime }}
+bantime = {{ fail2ban_nginx_badpaths_bantime }}

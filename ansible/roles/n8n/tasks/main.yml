@@ -1,0 +1,61 @@
+- name: Merge n8n default and explicit environment variables
+  ansible.builtin.set_fact:
+    n8n_effective_env: "{{ n8n_env_defaults | combine(n8n_env) }}"
+
+- name: Ensure n8n persistence directory exists
+  ansible.builtin.file:
+    path: /var/lib/n8n
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0750"
+
+- name: Ensure n8n config directory exists
+  ansible.builtin.file:
+    path: "{{ n8n_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Render n8n environment file
+  ansible.builtin.template:
+    src: n8n.env.j2
+    dest: "{{ n8n_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart n8n
+
+- name: Ensure n8n configuration directory exists
+  ansible.builtin.file:
+    path: "{{ n8n_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy n8n docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ n8n_install_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart n8n
+
+- name: Deploy n8n systemd service unit
+  ansible.builtin.template:
+    src: n8n.service.j2
+    dest: /etc/systemd/system/n8n.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart n8n
+
+- name: Ensure n8n systemd service is enabled and started
+  ansible.builtin.systemd:
+    name: n8n
+    enabled: true
+    state: started
+    daemon_reload: true

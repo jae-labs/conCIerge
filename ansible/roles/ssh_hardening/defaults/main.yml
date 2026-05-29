@@ -1,0 +1,4 @@
+ssh_hardening_service_name: ssh
+ssh_hardening_sshd_binary: /usr/sbin/sshd
+ssh_hardening_dropin_dir: /etc/ssh/sshd_config.d
+ssh_hardening_dropin_path: "{{ ssh_hardening_dropin_dir }}/50-concierge-hardening.conf"

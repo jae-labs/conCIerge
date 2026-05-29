@@ -1,0 +1,9 @@
+services:
+  concierge:
+    image: "{{ concierge_image }}:{{ concierge_image_tag }}"
+    container_name: concierge
+    pull_policy: always
+    network_mode: host
+    env_file:
+      - "{{ concierge_env_path }}"
+    restart: unless-stopped

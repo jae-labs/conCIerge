@@ -1,0 +1,69 @@
+- name: Configure OCI host baseline
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Configure baseline system (OS updates, etc.)
+      ansible.builtin.import_role:
+        name: common
+      tags: [common, baseline]
+
+    - name: Configure host firewall
+      ansible.builtin.import_role:
+        name: oci_iptables
+      tags: [oci_iptables, firewall, baseline]
+
+    - name: Configure SSH hardening
+      ansible.builtin.import_role:
+        name: ssh_hardening
+      tags: [ssh_hardening, security, baseline]
+
+    - name: Configure fail2ban
+      ansible.builtin.import_role:
+        name: fail2ban
+      tags: [fail2ban, security, baseline]
+
+    - name: Configure Tailscale
+      ansible.builtin.import_role:
+        name: tailscale
+      tags: [tailscale, baseline]
+
+    - name: Configure swapfile
+      ansible.builtin.import_role:
+        name: swapfile
+      tags: [swapfile, baseline]
+
+    - name: Configure Docker
+      ansible.builtin.import_role:
+        name: docker
+      tags: [docker, baseline]
+
+    - name: Configure nginx
+      ansible.builtin.import_role:
+        name: nginx
+      tags: [nginx, web]
+
+    - name: Deploy n8n
+      ansible.builtin.import_role:
+        name: n8n
+      tags: [n8n, web]
+
+    - name: Apply pending handlers before certificate issuance
+      ansible.builtin.meta: flush_handlers
+      tags: [always]
+
+    - name: Configure certbot
+      ansible.builtin.import_role:
+        name: certbot
+      tags: [certbot, web, security]
+
+    - name: Deploy concierge bot
+      ansible.builtin.import_role:
+        name: concierge
+      tags: [concierge, deploy]
+
+    - name: Deploy Grafana Alloy
+      ansible.builtin.import_role:
+        name: grafana_alloy
+      tags: [grafana_alloy, monitoring]
