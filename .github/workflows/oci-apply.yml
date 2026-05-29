@@ -59,7 +59,7 @@ jobs:
           TF_VAR_OCI_AVAILABILITY_DOMAIN: ${{ secrets.OCI_AVAILABILITY_DOMAIN }}
           TF_VAR_OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
           TF_VAR_OCI_SSH_AUTHORIZED_KEYS: ${{ secrets.OCI_SSH_AUTHORIZED_KEYS }}
-          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR }}
+          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
 
       - name: Cleanup credentials
         if: always()

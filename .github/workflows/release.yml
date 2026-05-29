@@ -312,7 +312,7 @@ jobs:
       - name: Ansible syntax check
         run: |
           cd ansible
-          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --syntax-check --tags concierge -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --syntax-check --tags concierge --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
         env:
           TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
           GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_URL }}
@@ -332,7 +332,7 @@ jobs:
       - name: Deploy released binary to OCI
         run: |
           cd ansible
-          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --tags concierge -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --tags concierge --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
         env:
           TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
           GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_URL }}
@@ -351,7 +351,7 @@ jobs:
 
       - name: Verify deployed service
         run: |
-          ssh -o BatchMode=yes ubuntu@oci.justanother.engineer 'systemctl is-active concierge && systemctl is-enabled concierge'
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$HOME/.ssh/id_ed25519" ubuntu@oci.justanother.engineer 'systemctl is-active concierge && systemctl is-enabled concierge'
           ts=$(date +%s)
           body='{"type":"url_verification","token":"token","challenge":"workflow-probe"}'
           sig=$(printf 'v0:%s:%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$SLACK_SIGNING_SECRET" -hex | awk '{print $2}')

@@ -170,7 +170,7 @@ jobs:
       - name: Ansible syntax check
         run: |
           cd ansible
-          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --syntax-check ${{ steps.build-args.outputs.ansible_args }} -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --syntax-check ${{ steps.build-args.outputs.ansible_args }} --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
         env:
           TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
           GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_URL }}
@@ -190,7 +190,7 @@ jobs:
       - name: Execute Ansible ad-hoc playbook
         run: |
           cd ansible
-          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml ${{ steps.build-args.outputs.ansible_args }} -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml ${{ steps.build-args.outputs.ansible_args }} --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
         env:
           TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.OCI_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
           GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_URL }}

@@ -46,7 +46,7 @@
           PrivateTmp=true
           ProtectSystem=strict
           ProtectHome=true
-          ReadWritePaths=/var/log/nginx /var/cache/nginx /run /var/www/certbot /etc/letsencrypt
+          ReadWritePaths=/var/log/nginx /var/cache/nginx /var/lib/nginx /run /var/www/certbot /etc/letsencrypt
           MemoryMax=768M
           CPUQuota=50%
           RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
