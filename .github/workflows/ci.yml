@@ -257,6 +257,7 @@ jobs:
         with:
           context: src
           load: true
+          platforms: linux/amd64
           tags: concierge:ci-test
 
       - name: Run Trivy vulnerability scanner on image

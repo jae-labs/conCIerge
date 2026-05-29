@@ -1,6 +1,6 @@
 module github.com/jae-labs/conCIerge
 
-go 1.25.0
+go 1.25.7
 
 require (
 	github.com/bradleyfalzon/ghinstallation/v2 v2.18.0
