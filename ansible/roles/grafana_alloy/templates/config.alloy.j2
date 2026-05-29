@@ -27,7 +27,28 @@ prometheus.relabel "add_instance_label" {
 
 // 1. Host (Unix) system metrics
 prometheus.exporter.unix "host" {
-  set_collectors = ["cpu", "time", "boottime", "meminfo", "diskstats", "netdev", "systemd", "filesystem", "loadavg", "tcpstat", "netstat", "sockstat"]
+  // tuned linux host profile for vm + container workloads.
+  set_collectors = [
+    "conntrack",
+    "cpu",
+    "diskstats",
+    "filefd",
+    "filesystem",
+    "loadavg",
+    "meminfo",
+    "netdev",
+    "netstat",
+    "pressure",
+    "processes",
+    "sockstat",
+    "softnet",
+    "stat",
+    "systemd",
+    "time",
+    "timex",
+    "uname",
+    "vmstat",
+  ]
 }
 
 prometheus.scrape "host" {
