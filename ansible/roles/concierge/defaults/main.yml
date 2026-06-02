@@ -1,0 +1,21 @@
+concierge_service_name: concierge
+
+concierge_install_dir: /opt/concierge
+
+concierge_config_dir: /etc/concierge
+concierge_env_path: "{{ concierge_config_dir }}/concierge.env"
+concierge_service_unit_path: "/etc/systemd/system/{{ concierge_service_name }}.service"
+
+concierge_image: ghcr.io/jae-labs/concierge
+concierge_image_tag: latest
+
+concierge_env_defaults: {}
+concierge_env: {}
+concierge_required_env_vars:
+  - SLACK_BOT_TOKEN
+  - SLACK_REQUESTS_CHANNEL_ID
+  - GITHUB_APP_ID
+  - GITHUB_APP_INSTALLATION_ID
+  - GITHUB_APP_PRIVATE_KEY
+  - GITHUB_OWNER
+  - GITHUB_REPO

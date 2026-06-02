@@ -1,0 +1,86 @@
+- name: Ensure Tailscale auth key is configured
+  ansible.builtin.assert:
+    that:
+      - tailscale_auth_key | length > 0
+    fail_msg: "TAILSCALE_AUTH_KEY must be present in the deployment environment."
+  no_log: true
+
+- name: Ensure apt prerequisites are installed
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+    state: present
+    update_cache: true
+
+- name: Download Tailscale apt key
+  ansible.builtin.get_url:
+    url: "{{ tailscale_apt_repo_url }}/{{ ansible_facts.distribution_release }}.noarmor.gpg"
+    dest: "{{ tailscale_apt_keyring_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Tailscale apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by={{ tailscale_apt_keyring_path }}] {{ tailscale_apt_repo_url }} {{ ansible_facts.distribution_release }} main"
+    filename: tailscale
+    state: present
+  register: tailscale_repository_result
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: true
+  register: tailscale_package_result
+  when: not (ansible_check_mode and tailscale_repository_result is changed)
+
+- name: Configure IP forwarding for Tailscale exit node
+  ansible.builtin.copy:
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+    dest: "{{ tailscale_sysctl_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: tailscale_sysctl_result
+
+- name: Apply Tailscale sysctl settings
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - --system
+  changed_when: true
+  when: tailscale_sysctl_result is changed
+
+- name: Ensure tailscaled is enabled and started
+  ansible.builtin.service:
+    name: tailscaled
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and (tailscale_repository_result is changed or tailscale_package_result is changed))
+
+- name: Ensure Tailscale auth key directory exists
+  ansible.builtin.file:
+    path: "{{ tailscale_auth_key_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write Tailscale auth key
+  ansible.builtin.copy:
+    content: "{{ tailscale_auth_key }}"
+    dest: "{{ tailscale_auth_key_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Configure Tailscale as exit node with SSH
+  ansible.builtin.command:
+    argv: "{{ ['tailscale', 'up', '--auth-key=file:' + tailscale_auth_key_path] + tailscale_up_args }}"
+  register: tailscale_up_result
+  changed_when: "'Success' in tailscale_up_result.stdout or 'Success' in tailscale_up_result.stderr"
+  when: not (ansible_check_mode and (tailscale_repository_result is changed or tailscale_package_result is changed))

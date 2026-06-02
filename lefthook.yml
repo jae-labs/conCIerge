@@ -1,0 +1,21 @@
+# Lefthook Git Hooks
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    go-fmt:
+      glob: "src/**/*.go"
+      run: gofmt -w {staged_files}
+    go-lint:
+      glob: "src/**/*.go"
+      run: cd src && golangci-lint run --timeout=5m
+    ansible-lint:
+      glob: "ansible/**/*.{yml,yaml}"
+      run: ANSIBLE_ROLES_PATH="$PWD/ansible/roles" ansible-lint -c "$PWD/.ansible-lint"
+
+pre-push:
+  commands:
+    go-test:
+      glob: "src/**/*.go"
+      run: cd src && go test -v -race ./...

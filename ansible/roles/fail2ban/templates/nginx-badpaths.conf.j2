@@ -1,0 +1,5 @@
+# Managed by Ansible: conCIerge fail2ban nginx bad paths filter
+[Definition]
+# why: nginx logs only non-allowed 443 paths to blocked_paths.log, so matching this line is enough to identify abuse sources.
+failregex = ^.*"remote_addr":"<HOST>".*$
+ignoreregex =

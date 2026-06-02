@@ -1,0 +1,215 @@
+name: "Ansible Ad-hoc Configuration"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Ansible tag category to execute"
+        required: true
+        type: choice
+        default: "all"
+        options:
+          - "all"
+          - "baseline"
+          - "web"
+          - "monitoring"
+          - "concierge"
+          - "custom"
+      custom_tags:
+        description: "Custom tags (comma-separated, only used if category is 'custom')"
+        required: false
+        type: string
+        default: ""
+      custom_skip_tags:
+        description: "Tags to skip (comma-separated)"
+        required: false
+        type: string
+        default: ""
+      concierge_image_tag:
+        description: "Docker image tag for concierge"
+        required: true
+        type: string
+        default: "latest"
+      check_mode:
+        description: "Dry run (Check mode)"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  ansible-adhoc:
+    name: "Ansible Ad-hoc Run"
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: concierge-deploy-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+
+      - name: Install Ansible
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user ansible
+
+      - name: Add local Python bin to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Bootstrap Ansible dependencies
+        run: |
+          cd ansible
+          bash bootstrap.sh
+
+      - name: Configure OCI auth
+        run: |
+          mkdir -p "$HOME/.oci"
+          printf '%s' "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/oci_api_key.pem"
+          {
+            printf '[DEFAULT]\n'
+            printf 'user=%s\n' "$OCI_USER_OCID"
+            printf 'fingerprint=%s\n' "$OCI_FINGERPRINT"
+            printf 'tenancy=%s\n' "$OCI_TENANCY_OCID"
+            printf 'region=%s\n' "$OCI_REGION"
+            printf 'key_file=%s/.oci/oci_api_key.pem\n' "$HOME"
+            if [ -n "${OCI_PRIVATE_KEY_PASSPHRASE:-}" ]; then
+              printf 'pass_phrase=%s\n' "$OCI_PRIVATE_KEY_PASSPHRASE"
+            fi
+          } > "$HOME/.oci/config"
+          chmod 600 "$HOME/.oci/config"
+        env:
+          OCI_USER_OCID: ${{ secrets.CONCIERGE_OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.CONCIERGE_OCI_FINGERPRINT }}
+          OCI_TENANCY_OCID: ${{ secrets.CONCIERGE_OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ secrets.CONCIERGE_OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.CONCIERGE_OCI_PRIVATE_KEY }}
+          OCI_PRIVATE_KEY_PASSPHRASE: ${{ secrets.OCI_PRIVATE_KEY_PASSPHRASE }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s' "$OCI_SSH_PRIVATE_KEY_B64" | base64 -d > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          ssh-keyscan -H oci.justanother.engineer > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+        env:
+          OCI_SSH_PRIVATE_KEY_B64: ${{ secrets.CONCIERGE_OCI_SSH_PRIVATE_KEY_B64 }}
+
+      - name: Prepare deploy variables
+        id: deploy-vars
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "concierge_image_tag": os.environ["IMAGE_TAG"],
+              "concierge_env": {
+                  "SLACK_BOT_TOKEN": os.environ["SLACK_BOT_TOKEN"],
+                  "SLACK_SIGNING_SECRET": os.environ["SLACK_SIGNING_SECRET"],
+                  "SLACK_REQUESTS_CHANNEL_ID": os.environ["SLACK_REQUESTS_CHANNEL_ID"],
+                  "SLACK_USER_IDS": os.environ["SLACK_USER_IDS"],
+                  "SLACK_MANAGER_IDS": os.environ["SLACK_MANAGER_IDS"],
+                  "SLACK_ADMIN_IDS": os.environ["SLACK_ADMIN_IDS"],
+                  "GITHUB_APP_ID": os.environ["APP_ID"],
+                  "GITHUB_APP_INSTALLATION_ID": os.environ["APP_INSTALLATION_ID"],
+                  "GITHUB_APP_PRIVATE_KEY": os.environ["APP_PRIVATE_KEY"],
+                  "GITHUB_OWNER": os.environ["APP_OWNER"],
+                  "GITHUB_REPO": os.environ["APP_REPO"],
+              },
+          }
+
+          vars_file = Path(os.environ["RUNNER_TEMP"]) / "concierge-deploy-vars.json"
+          vars_file.write_text(json.dumps(payload))
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"vars_file={vars_file}\n")
+          PY
+        env:
+          IMAGE_TAG: ${{ inputs.concierge_image_tag }}
+          SLACK_BOT_TOKEN: ${{ secrets.CONCIERGE_SLACK_BOT_TOKEN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.CONCIERGE_SLACK_SIGNING_SECRET }}
+          SLACK_REQUESTS_CHANNEL_ID: ${{ secrets.CONCIERGE_SLACK_REQUESTS_CHANNEL_ID || vars.SLACK_REQUESTS_CHANNEL_ID }}
+          SLACK_USER_IDS: ${{ secrets.CONCIERGE_SLACK_USER_IDS || vars.SLACK_USER_IDS }}
+          SLACK_MANAGER_IDS: ${{ secrets.SLACK_MANAGER_IDS || vars.SLACK_MANAGER_IDS }}
+          SLACK_ADMIN_IDS: ${{ secrets.SLACK_ADMIN_IDS || vars.SLACK_ADMIN_IDS }}
+          APP_ID: ${{ secrets.CONCIERGE_GH_APP_ID }}
+          APP_INSTALLATION_ID: ${{ secrets.CONCIERGE_GH_APP_INSTALLATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.CONCIERGE_GH_APP_PRIVATE_KEY }}
+          APP_OWNER: ${{ secrets.CONCIERGE_GH_OWNER || vars.CONCIERGE_GH_OWNER }}
+          APP_REPO: ${{ secrets.CONCIERGE_GH_REPO || vars.CONCIERGE_GH_REPO }}
+
+      - name: Build Ansible arguments
+        id: build-args
+        run: |
+          TAGS_ARG=""
+          if [ "${{ inputs.category }}" != "all" ] && [ "${{ inputs.category }}" != "custom" ]; then
+            TAGS_ARG="--tags ${{ inputs.category }}"
+          elif [ "${{ inputs.category }}" == "custom" ] && [ -n "${{ inputs.custom_tags }}" ]; then
+            TAGS_ARG="--tags ${{ inputs.custom_tags }}"
+          fi
+
+          SKIP_TAGS_ARG=""
+          if [ -n "${{ inputs.custom_skip_tags }}" ]; then
+            SKIP_TAGS_ARG="--skip-tags ${{ inputs.custom_skip_tags }}"
+          fi
+
+          CHECK_ARG=""
+          if [ "${{ inputs.check_mode }}" = "true" ]; then
+            CHECK_ARG="--check"
+          fi
+
+          echo "ansible_args=${TAGS_ARG} ${SKIP_TAGS_ARG} ${CHECK_ARG}" >> "$GITHUB_OUTPUT"
+
+      - name: Ansible syntax check
+        run: |
+          cd ansible
+          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml --syntax-check ${{ steps.build-args.outputs.ansible_args }} --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+        env:
+          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.CONCIERGE_TF_VAR_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
+          GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_URL }}
+          GRAFANA_CLOUD_PROMETHEUS_USERNAME: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_USERNAME }}
+          GRAFANA_CLOUD_PROMETHEUS_TOKEN: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_TOKEN }}
+          GRAFANA_CLOUD_LOKI_URL: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_LOKI_URL }}
+          GRAFANA_CLOUD_LOKI_USERNAME: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_LOKI_USERNAME }}
+          GRAFANA_CLOUD_LOKI_TOKEN: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_LOKI_TOKEN }}
+          GRAFANA_CLOUD_TEMPO_URL: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_TEMPO_URL }}
+          GRAFANA_CLOUD_TEMPO_USERNAME: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_TEMPO_USERNAME }}
+          GRAFANA_CLOUD_TEMPO_TOKEN: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_TEMPO_TOKEN }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.CONCIERGE_TAILSCALE_AUTH_KEY }}
+          SENTRY_DSN: ${{ secrets.CONCIERGE_SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT || vars.SENTRY_ENVIRONMENT }}
+          SENTRY_RELEASE: ${{ github.ref_name }}
+
+      - name: Execute Ansible ad-hoc playbook
+        run: |
+          cd ansible
+          ansible-playbook -i inventory/oci.oci.yml playbooks/site.yml ${{ steps.build-args.outputs.ansible_args }} --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+        env:
+          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.CONCIERGE_TF_VAR_SSH_INGRESS_CIDR || vars.OCI_SSH_INGRESS_CIDR }}
+          GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_URL }}
+          GRAFANA_CLOUD_PROMETHEUS_USERNAME: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_USERNAME }}
+          GRAFANA_CLOUD_PROMETHEUS_TOKEN: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_TOKEN }}
+          GRAFANA_CLOUD_LOKI_URL: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_LOKI_URL }}
+          GRAFANA_CLOUD_LOKI_USERNAME: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_LOKI_USERNAME }}
+          GRAFANA_CLOUD_LOKI_TOKEN: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_LOKI_TOKEN }}
+          GRAFANA_CLOUD_TEMPO_URL: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_TEMPO_URL }}
+          GRAFANA_CLOUD_TEMPO_USERNAME: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_TEMPO_USERNAME }}
+          GRAFANA_CLOUD_TEMPO_TOKEN: ${{ secrets.CONCIERGE_GRAFANA_CLOUD_TEMPO_TOKEN }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.CONCIERGE_TAILSCALE_AUTH_KEY }}
+          SENTRY_DSN: ${{ secrets.CONCIERGE_SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT || vars.SENTRY_ENVIRONMENT }}
+          SENTRY_RELEASE: ${{ github.ref_name }}
+
+      - name: Cleanup deploy credentials
+        if: always()
+        run: |
+          rm -f "$HOME/.oci/config" "$HOME/.oci/oci_api_key.pem"
+          rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          rm -f "${{ steps.deploy-vars.outputs.vars_file }}"

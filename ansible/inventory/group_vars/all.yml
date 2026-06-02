@@ -1,0 +1,54 @@
+ansible_become: true
+ansible_user: ubuntu
+ansible_ssh_common_args: "-o HostKeyAlias={{ fqdn }}"
+
+fqdn: oci.justanother.engineer
+letsencrypt_email: "luiz@justanother.engineer"
+
+oci_iptables_ssh_ingress_cidr: "{{ lookup('env', 'TF_VAR_SSH_INGRESS_CIDR') | default('0.0.0.0/0', true) }}"
+oci_iptables_rules_path: /etc/iptables/rules.v4
+oci_iptables_packages:
+  - iptables
+  - iptables-persistent
+oci_iptables_allowed_tcp_ports:
+  - 80
+  - 443
+
+concierge_env_defaults:
+  SLACK_MODE: http
+  SLACK_HTTP_LISTEN_ADDR: 127.0.0.1:8080
+  OTEL_SERVICE_NAME: "concierge"
+  OTEL_ENVIRONMENT: "production"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "127.0.0.1:4317"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  METRICS_ENABLED: "true"
+  METRICS_LISTEN_ADDR: "127.0.0.1:9090"
+
+concierge_env:
+  SLACK_BOT_TOKEN: "{{ lookup('env', 'SLACK_BOT_TOKEN') | default(lookup('env', 'CONCIERGE_SLACK_BOT_TOKEN'), true) | default('', true) }}"
+  SLACK_SIGNING_SECRET: "{{ lookup('env', 'SLACK_SIGNING_SECRET') | default(lookup('env', 'CONCIERGE_SLACK_SIGNING_SECRET'), true) | default('', true) }}"
+  SLACK_REQUESTS_CHANNEL_ID: "{{ lookup('env', 'SLACK_REQUESTS_CHANNEL_ID') | default(lookup('env', 'CONCIERGE_SLACK_REQUESTS_CHANNEL_ID'), true) | default('', true) }}"
+  SLACK_USER_IDS: "{{ lookup('env', 'SLACK_USER_IDS') | default(lookup('env', 'CONCIERGE_SLACK_USER_IDS'), true) | default('', true) }}"
+  SLACK_APP_TOKEN: "{{ lookup('env', 'SLACK_APP_TOKEN') | default(lookup('env', 'CONCIERGE_SLACK_APP_TOKEN'), true) | default('', true) }}"
+  SLACK_MODE: "{{ lookup('env', 'SLACK_MODE') | default(lookup('env', 'CONCIERGE_SLACK_MODE'), true) | default('', true) }}"
+  GITHUB_APP_ID: "{{ lookup('env', 'GITHUB_APP_ID') | default(lookup('env', 'CONCIERGE_GH_APP_ID'), true) | default('', true) }}"
+  GITHUB_APP_INSTALLATION_ID: "{{ lookup('env', 'GITHUB_APP_INSTALLATION_ID') | default(lookup('env', 'CONCIERGE_GH_APP_INSTALLATION_ID'), true) | default('', true) }}"
+  GITHUB_APP_PRIVATE_KEY: "{{ lookup('env', 'GITHUB_APP_PRIVATE_KEY') | default(lookup('env', 'CONCIERGE_GH_APP_PRIVATE_KEY'), true) | default('', true) }}"
+  GITHUB_OWNER: "{{ lookup('env', 'GITHUB_OWNER') | default(lookup('env', 'CONCIERGE_GH_OWNER'), true) | default('', true) }}"
+  GITHUB_REPO: "{{ lookup('env', 'GITHUB_REPO') | default(lookup('env', 'CONCIERGE_GH_REPO'), true) | default('', true) }}"
+  SENTRY_DSN: "{{ lookup('env', 'SENTRY_DSN') | default(lookup('env', 'CONCIERGE_SENTRY_DSN'), true) | default('', true) }}"
+  SENTRY_ENVIRONMENT: "{{ lookup('env', 'SENTRY_ENVIRONMENT') | default('', true) }}"
+  SENTRY_RELEASE: "{{ lookup('env', 'SENTRY_RELEASE') | default('', true) }}"
+
+# Grafana Cloud Settings - pulled dynamically from local environment variables during deploy
+grafana_cloud_prometheus_url: "{{ lookup('env', 'GRAFANA_CLOUD_PROMETHEUS_URL') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_URL'), true) | default('', true) }}"
+grafana_cloud_prometheus_username: "{{ lookup('env', 'GRAFANA_CLOUD_PROMETHEUS_USERNAME') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_USERNAME'), true) | default('', true) }}"
+grafana_cloud_prometheus_token: "{{ lookup('env', 'GRAFANA_CLOUD_PROMETHEUS_TOKEN') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_PROMETHEUS_TOKEN'), true) | default('', true) }}"
+
+grafana_cloud_loki_url: "{{ lookup('env', 'GRAFANA_CLOUD_LOKI_URL') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_LOKI_URL'), true) | default('', true) }}"
+grafana_cloud_loki_username: "{{ lookup('env', 'GRAFANA_CLOUD_LOKI_USERNAME') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_LOKI_USERNAME'), true) | default('', true) }}"
+grafana_cloud_loki_token: "{{ lookup('env', 'GRAFANA_CLOUD_LOKI_TOKEN') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_LOKI_TOKEN'), true) | default('', true) }}"
+
+grafana_cloud_tempo_url: "{{ lookup('env', 'GRAFANA_CLOUD_TEMPO_URL') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_TEMPO_URL'), true) | default('', true) }}"
+grafana_cloud_tempo_username: "{{ lookup('env', 'GRAFANA_CLOUD_TEMPO_USERNAME') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_TEMPO_USERNAME'), true) | default('', true) }}"
+grafana_cloud_tempo_token: "{{ lookup('env', 'GRAFANA_CLOUD_TEMPO_TOKEN') | default(lookup('env', 'CONCIERGE_GRAFANA_CLOUD_TEMPO_TOKEN'), true) | default('', true) }}"

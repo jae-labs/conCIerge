@@ -1,0 +1,10 @@
+tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') | default(lookup('env', 'CONCIERGE_TAILSCALE_AUTH_KEY'), true) | default('', true) }}"
+tailscale_hostname: oci-concierge
+tailscale_apt_keyring_path: /usr/share/keyrings/tailscale-archive-keyring.gpg
+tailscale_apt_repo_url: "https://pkgs.tailscale.com/stable/ubuntu"
+tailscale_auth_key_path: /etc/tailscale/auth.key
+tailscale_sysctl_path: /etc/sysctl.d/99-tailscale.conf
+tailscale_up_args:
+  - --advertise-exit-node
+  - --ssh
+  - --hostname={{ tailscale_hostname }}

@@ -1,0 +1,17 @@
+# Ansible Lint Configuration
+# https://ansible-lint.readthedocs.io/configuring/
+
+exclude_paths:
+  - .venv/
+  - __pycache__/
+  - .ansible/
+  - node_modules/
+  - .github/
+  - src/
+  - terraform/
+
+skip_list:
+  - var-naming
+  - no-changed-when
+  - no-handler
+  - yaml[line-length]

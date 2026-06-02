@@ -1,0 +1,12 @@
+services:
+  n8n:
+    image: "{{ n8n_image }}:{{ n8n_image_tag }}"
+    container_name: n8n
+    pull_policy: always
+    ports:
+      - "127.0.0.1:5678:5678"
+    env_file:
+      - "{{ n8n_env_path }}"
+    volumes:
+      - /var/lib/n8n:/home/node/.n8n
+    restart: unless-stopped

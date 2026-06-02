@@ -1,0 +1,85 @@
+- name: Check swapfile state
+  ansible.builtin.stat:
+    path: "{{ swapfile_path }}"
+  register: swapfile_stat
+
+- name: Ensure existing swapfile matches configured size
+  ansible.builtin.assert:
+    that:
+      - swapfile_stat.stat.size == (swapfile_size_mb | int) * 1024 * 1024
+    fail_msg: "Existing swapfile at {{ swapfile_path }} does not match configured size of {{ swapfile_size_mb }} MiB."
+  when: swapfile_stat.stat.exists
+
+- name: Allocate swapfile
+  ansible.builtin.command:
+    argv:
+      - fallocate
+      - -l
+      - "{{ swapfile_size_mb }}M"
+      - "{{ swapfile_path }}"
+  when: not swapfile_stat.stat.exists
+
+- name: Ensure swapfile permissions
+  ansible.builtin.file:
+    path: "{{ swapfile_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Check swapfile signature
+  ansible.builtin.command:
+    argv:
+      - file
+      - -s
+      - "{{ swapfile_path }}"
+  register: swapfile_signature
+  changed_when: false
+
+- name: Initialize swapfile
+  ansible.builtin.command:
+    argv:
+      - mkswap
+      - "{{ swapfile_path }}"
+  when: "'swap file' not in swapfile_signature.stdout"
+
+- name: Persist swapfile in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ swapfile_path | regex_escape() }}\\s+none\\s+swap\\s+"
+    line: "{{ swapfile_fstab_line }}"
+    state: present
+
+- name: Check active swap devices
+  ansible.builtin.command:
+    argv:
+      - swapon
+      - --show=NAME
+      - --noheadings
+  register: swapfile_active
+  changed_when: false
+
+- name: Activate swapfile
+  ansible.builtin.command:
+    argv:
+      - swapon
+      - "{{ swapfile_path }}"
+  when: swapfile_path not in swapfile_active.stdout_lines
+
+- name: Configure swap-related sysctl tuning
+  ansible.builtin.copy:
+    dest: "{{ swapfile_sysctl_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible: conCIerge swap tuning
+      # why: keep anonymous pages in RAM longer on low-memory hosts to reduce swap-induced latency.
+      vm.swappiness={{ swapfile_vm_swappiness }}
+  register: swapfile_sysctl_config
+
+- name: Apply sysctl tuning
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - --system
+  when: swapfile_sysctl_config is changed

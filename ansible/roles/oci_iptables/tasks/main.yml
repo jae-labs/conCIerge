@@ -1,0 +1,48 @@
+- name: Preseed iptables-persistent IPv4 autosave
+  ansible.builtin.debconf:
+    name: iptables-persistent
+    question: iptables-persistent/autosave_v4
+    vtype: boolean
+    value: "true"
+
+- name: Preseed iptables-persistent IPv6 autosave
+  ansible.builtin.debconf:
+    name: iptables-persistent
+    question: iptables-persistent/autosave_v6
+    vtype: boolean
+    value: "false"
+
+- name: Install iptables packages
+  ansible.builtin.apt:
+    name: "{{ oci_iptables_packages }}"
+    state: present
+    update_cache: true
+
+- name: Ensure IPv4 netfilter restore flushes stale cloud image rules
+  ansible.builtin.lineinfile:
+    path: /etc/default/netfilter-persistent
+    regexp: '^IPTABLES_RESTORE_NOFLUSH='
+    line: 'IPTABLES_RESTORE_NOFLUSH=no'
+  notify: Apply netfilter-persistent rules
+
+- name: Ensure IPv6 netfilter restore flushes stale cloud image rules
+  ansible.builtin.lineinfile:
+    path: /etc/default/netfilter-persistent
+    regexp: '^IP6TABLES_RESTORE_NOFLUSH='
+    line: 'IP6TABLES_RESTORE_NOFLUSH=no'
+  notify: Apply netfilter-persistent rules
+
+- name: Render IPv4 iptables rules
+  ansible.builtin.template:
+    src: rules.v4.j2
+    dest: "{{ oci_iptables_rules_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply netfilter-persistent rules
+
+- name: Ensure netfilter-persistent is enabled
+  ansible.builtin.service:
+    name: netfilter-persistent
+    enabled: true
+    state: started

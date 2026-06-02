@@ -1,0 +1,189 @@
+// Grafana Alloy Configuration
+// Managed by Ansible - conCIerge deployment
+
+// ----------------------------------------------------
+// METRICS (PROMETHEUS) CONFIGURATION
+// ----------------------------------------------------
+
+prometheus.remote_write "grafana_cloud_metrics" {
+  endpoint {
+    url = "{{ grafana_cloud_prometheus_url }}"
+    basic_auth {
+      username = "{{ grafana_cloud_prometheus_username }}"
+      password = "{{ grafana_cloud_prometheus_token }}"
+    }
+  }
+}
+
+// Global Relabeling to inject the Ansible hostname as 'instance'
+prometheus.relabel "add_instance_label" {
+  forward_to = [prometheus.remote_write.grafana_cloud_metrics.receiver]
+
+  rule {
+    target_label = "instance"
+    replacement  = "{{ ansible_hostname }}"
+  }
+}
+
+// 1. Host (Unix) system metrics
+prometheus.exporter.unix "host" {
+  // tuned linux host profile for vm + container workloads.
+  set_collectors = [
+    "conntrack",
+    "cpu",
+    "diskstats",
+    "filefd",
+    "filesystem",
+    "loadavg",
+    "meminfo",
+    "netdev",
+    "netstat",
+    "pressure",
+    "processes",
+    "sockstat",
+    "softnet",
+    "stat",
+    "systemd",
+    "time",
+    "timex",
+    "uname",
+    "vmstat",
+  ]
+}
+
+prometheus.scrape "host" {
+  targets    = prometheus.exporter.unix.host.targets
+  forward_to = [prometheus.relabel.add_instance_label.receiver]
+  job_name   = "integrations/node_exporter"
+}
+
+// 2. Concierge Application metrics
+prometheus.scrape "concierge" {
+  targets = [
+    {"__address__" = "127.0.0.1:9090"},
+  ]
+  forward_to = [prometheus.relabel.add_instance_label.receiver]
+  job_name   = "integrations/concierge"
+}
+
+// 3. Nginx Status metrics via prometheus-nginx-exporter
+prometheus.scrape "nginx" {
+  targets = [
+    {"__address__" = "127.0.0.1:9113"},
+  ]
+  forward_to = [prometheus.relabel.add_instance_label.receiver]
+  job_name   = "integrations/nginx"
+}
+
+// 4. Alloy self-metrics
+prometheus.scrape "alloy" {
+  targets = [
+    {"__address__" = "127.0.0.1:12345"},
+  ]
+  forward_to = [prometheus.relabel.add_instance_label.receiver]
+  job_name   = "integrations/alloy"
+}
+
+// 5. Individual Docker Container metrics
+prometheus.exporter.cadvisor "containers" {
+  docker_only = true
+}
+
+prometheus.scrape "containers" {
+  targets    = prometheus.exporter.cadvisor.containers.targets
+  forward_to = [prometheus.relabel.add_instance_label.receiver]
+  job_name   = "integrations/docker"
+}
+
+// ----------------------------------------------------
+// LOGS (LOKI) CONFIGURATION
+// ----------------------------------------------------
+
+loki.write "grafana_cloud_logs" {
+  endpoint {
+    url = "{{ grafana_cloud_loki_url }}"
+    basic_auth {
+      username = "{{ grafana_cloud_loki_username }}"
+      password = "{{ grafana_cloud_loki_token }}"
+    }
+  }
+}
+
+// 1. Journald system logs (concierge and other systemd units)
+loki.relabel "journald" {
+  forward_to = [loki.write.grafana_cloud_logs.receiver]
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "integrations/linux-server"
+  }
+  rule {
+    source_labels = ["__journal__hostname"]
+    target_label  = "instance"
+  }
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    target_label  = "syslog_identifier"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.source.journal "journald" {
+  forward_to = [loki.relabel.journald.receiver]
+}
+
+// 2. Nginx access and error files
+local.file_match "nginx_logs" {
+  path_targets = [
+    {"__address__" = "localhost", "__path__" = "/var/log/nginx/*.log"},
+  ]
+}
+
+loki.relabel "nginx" {
+  forward_to = [loki.write.grafana_cloud_logs.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "nginx"
+  }
+}
+
+loki.source.file "nginx" {
+  targets    = local.file_match.nginx_logs.targets
+  forward_to = [loki.relabel.nginx.receiver]
+}
+
+// ----------------------------------------------------
+// TRACES (TEMPO / OTLP) CONFIGURATION
+// ----------------------------------------------------
+
+otelcol.auth.basic "grafana_cloud_traces_auth" {
+  username = "{{ grafana_cloud_tempo_username }}"
+  password = "{{ grafana_cloud_tempo_token }}"
+}
+
+otelcol.exporter.otlp "grafana_cloud_traces" {
+  client {
+    endpoint = "{{ grafana_cloud_tempo_url }}"
+    auth     = otelcol.auth.basic.grafana_cloud_traces_auth.handler
+  }
+}
+
+otelcol.receiver.otlp "concierge" {
+  grpc {
+    endpoint = "127.0.0.1:4317"
+  }
+  http {
+    endpoint = "127.0.0.1:4318"
+  }
+  output {
+    traces  = [otelcol.exporter.otlp.grafana_cloud_traces.input]
+  }
+}

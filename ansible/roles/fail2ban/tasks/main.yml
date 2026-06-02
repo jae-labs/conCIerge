@@ -1,0 +1,56 @@
+- name: Install fail2ban packages
+  ansible.builtin.apt:
+    name: "{{ fail2ban_packages }}"
+    state: present
+    update_cache: true
+  register: fail2ban_package_result
+
+- name: Ensure fail2ban jail directory exists
+  ansible.builtin.file:
+    path: "{{ fail2ban_jail_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure fail2ban filter directory exists
+  ansible.builtin.file:
+    path: "{{ fail2ban_filter_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure fail2ban nginx bad paths filter
+  ansible.builtin.template:
+    src: nginx-badpaths.conf.j2
+    dest: "{{ fail2ban_nginx_badpaths_filter_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Configure fail2ban sshd jail
+  ansible.builtin.template:
+    src: sshd.local.j2
+    dest: "{{ fail2ban_sshd_jail_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Configure fail2ban nginx bad paths jail
+  ansible.builtin.template:
+    src: nginx-badpaths.local.j2
+    dest: "{{ fail2ban_nginx_badpaths_jail_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Ensure fail2ban service is enabled and started
+  ansible.builtin.service:
+    name: "{{ fail2ban_service_name }}"
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and fail2ban_package_result is changed)

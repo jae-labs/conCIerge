@@ -1,0 +1,22 @@
+fail2ban_service_name: fail2ban
+fail2ban_packages:
+  - fail2ban
+  - python3-systemd
+fail2ban_jail_dir: /etc/fail2ban/jail.d
+fail2ban_filter_dir: /etc/fail2ban/filter.d
+fail2ban_sshd_jail_path: "{{ fail2ban_jail_dir }}/sshd.local"
+fail2ban_sshd_backend: systemd
+fail2ban_sshd_banaction: iptables-multiport
+fail2ban_sshd_maxretry: 3
+fail2ban_sshd_findtime: 10m
+fail2ban_sshd_bantime: 1h
+fail2ban_nginx_badpaths_filter_name: nginx-badpaths
+fail2ban_nginx_badpaths_filter_path: "{{ fail2ban_filter_dir }}/{{ fail2ban_nginx_badpaths_filter_name }}.conf"
+fail2ban_nginx_badpaths_jail_path: "{{ fail2ban_jail_dir }}/nginx-badpaths.local"
+fail2ban_nginx_badpaths_backend: polling
+fail2ban_nginx_badpaths_logpath: /var/log/nginx/blocked_paths.log
+fail2ban_nginx_badpaths_port: https,http
+fail2ban_nginx_badpaths_banaction: iptables-multiport
+fail2ban_nginx_badpaths_maxretry: 20
+fail2ban_nginx_badpaths_findtime: 10m
+fail2ban_nginx_badpaths_bantime: 1h
