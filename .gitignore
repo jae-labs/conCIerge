@@ -9,7 +9,8 @@
 .vscode/
 
 # Go
-src/concierge
+concierge
+tmp/
 *.test
 *.out
 
