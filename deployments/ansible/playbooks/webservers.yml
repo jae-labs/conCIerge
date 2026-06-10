@@ -1,0 +1,14 @@
+- name: Deploy concierge webservers
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Deploy concierge bot
+      ansible.builtin.import_role:
+        name: app
+
+    - name: Configure Grafana Alloy for Concierge
+      ansible.builtin.import_role:
+        name: grafana_alloy
+      tags: [grafana_alloy]

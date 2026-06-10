@@ -1,0 +1,3 @@
+plugin: oracle.oci.oci
+compose:
+  ansible_host: display_name

@@ -1,0 +1,6 @@
+# Python and Ansible runtime constraints. Pinned to ansible-core 2.21
+# (matches the README badge and the modules used by the playbooks, e.g.
+# ansible.builtin.deb822_repository introduced in 2.13, ansible.builtin.systemd
+# in 2.16).
+ansible-core==2.21.*
+oci==2.175.0

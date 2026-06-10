@@ -1,0 +1,9 @@
+---
+- name: Render Concierge Grafana Alloy configuration
+  ansible.builtin.template:
+    src: concierge.alloy.j2
+    dest: /etc/alloy/concierge.alloy
+    owner: alloy
+    group: alloy
+    mode: "0600"
+  notify: Restart alloy

@@ -1,0 +1,144 @@
+- name: Ensure concierge_env is a mapping
+  ansible.builtin.assert:
+    that:
+      - concierge_env is mapping
+    fail_msg: concierge_env must be provided as a key/value mapping of environment variables.
+
+- name: Ensure concierge_env_defaults is a mapping
+  ansible.builtin.assert:
+    that:
+      - concierge_env_defaults is mapping
+    fail_msg: concierge_env_defaults must be provided as a key/value mapping of environment variables.
+
+- name: Merge concierge default and explicit environment variables
+  ansible.builtin.set_fact:
+    concierge_effective_env: "{{ concierge_env_defaults | combine(concierge_env) }}"
+
+- name: Ensure concierge runtime mode is valid
+  ansible.builtin.assert:
+    that:
+      - (concierge_effective_env.SLACK_MODE | default('socket') | lower) in ['socket', 'http']
+    fail_msg: SLACK_MODE must be socket or http.
+
+- name: Ensure required concierge environment variables are present
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env[item] is defined
+      - (concierge_effective_env[item] | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: {{ item }}"
+  loop: "{{ concierge_required_env_vars }}"
+
+- name: Ensure socket mode has an app token
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env.SLACK_APP_TOKEN is defined
+      - (concierge_effective_env.SLACK_APP_TOKEN | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: SLACK_APP_TOKEN"
+  when: (concierge_effective_env.SLACK_MODE | default('socket') | lower) == 'socket'
+
+- name: Ensure http mode has a signing secret
+  ansible.builtin.assert:
+    that:
+      - concierge_effective_env.SLACK_SIGNING_SECRET is defined
+      - (concierge_effective_env.SLACK_SIGNING_SECRET | string | trim | length) > 0
+    fail_msg: "Missing required concierge environment variable: SLACK_SIGNING_SECRET"
+  when: (concierge_effective_env.SLACK_MODE | default('socket') | lower) == 'http'
+
+- name: Ensure concierge install directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure concierge config directory exists
+  ansible.builtin.file:
+    path: "{{ concierge_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Render concierge environment file
+  ansible.builtin.template:
+    src: concierge.env.j2
+    dest: "{{ concierge_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Deploy concierge Nomad job spec
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../deployments/nomad/concierge.nomad.hcl"
+    dest: "{{ concierge_install_dir }}/concierge.nomad.hcl"
+    owner: root
+    group: root
+    mode: "0644"
+  register: nomad_job_spec
+
+- name: Run concierge Nomad job
+  ansible.builtin.command:
+    cmd: >
+      nomad job run
+      -var="image_tag={{ concierge_image_tag }}"
+      {{ concierge_install_dir }}/concierge.nomad.hcl
+  register: nomad_job_run
+  changed_when: true
+  when:
+    - not ansible_check_mode
+
+- name: Get Nomad deployment ID
+  ansible.builtin.shell:
+    cmd: >
+      set -o pipefail &&
+      nomad job deployments -json concierge |
+      jq -r '.[0].ID // empty'
+    executable: /bin/bash
+  register: nomad_deployment_id
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - nomad_job_run is succeeded
+
+- name: Wait for Nomad deployment to succeed
+  ansible.builtin.shell:
+    cmd: >
+      set -o pipefail &&
+      nomad deployment status -json {{ nomad_deployment_id.stdout }} |
+      jq -r '.Status // empty'
+    executable: /bin/bash
+  register: nomad_deployment_status
+  until: >
+    nomad_deployment_status.rc == 0 and
+    (nomad_deployment_status.stdout | trim | lower) in ['successful', 'failed', 'cancelled']
+  # cap CI-side waiting so Actions does not hold the Tailscale session indefinitely
+  retries: 15
+  delay: 5
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - nomad_deployment_id.stdout | default('') | length > 0
+
+- name: Fail if Nomad deployment did not reach a terminal state in time
+  ansible.builtin.fail:
+    msg: >
+      Nomad deployment {{ nomad_deployment_id.stdout }} did not reach a terminal state
+      within 75 seconds of polling.
+      Check with: nomad deployment status {{ nomad_deployment_id.stdout }}
+  when:
+    - not ansible_check_mode
+    - nomad_deployment_id.stdout | default('') | length > 0
+    - nomad_deployment_status is defined
+    - nomad_deployment_status.attempts | default(0) >= 15
+    - (nomad_deployment_status.stdout | default('') | trim | lower) not in ['successful', 'failed', 'cancelled']
+
+- name: Fail if Nomad deployment failed
+  ansible.builtin.fail:
+    msg: >
+      Nomad deployment {{ nomad_deployment_id.stdout }} failed.
+      The previous version has been auto-reverted.
+      Check with: nomad deployment status {{ nomad_deployment_id.stdout }}
+  when:
+    - not ansible_check_mode
+    - (nomad_deployment_status.stdout | default('') | trim | lower) in ['failed', 'cancelled']
