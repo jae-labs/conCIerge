@@ -58,6 +58,7 @@ func TestValidateModalViewRequestRejectsLongBlockID(t *testing.T) {
 	err := validateModalViewRequest(view)
 	if err == nil {
 		t.Fatal("expected validation error")
+		return
 	}
 	if !strings.Contains(err.Error(), "block_id") {
 		t.Fatalf("err=%q, want block_id violation", err)
@@ -98,6 +99,7 @@ func TestValidateModalViewRequestRejectsTooManyStaticSelectOptions(t *testing.T)
 	err := validateModalViewRequest(view)
 	if err == nil {
 		t.Fatal("expected validation error")
+		return
 	}
 	if !strings.Contains(err.Error(), "options exceeds Slack limit") {
 		t.Fatalf("err=%q, want options limit violation", err)

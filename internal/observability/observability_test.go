@@ -30,12 +30,15 @@ func TestSetup_noTracesEndpoint(t *testing.T) {
 	}
 	if rt == nil {
 		t.Fatal("Setup returned nil Runtime")
+		return
 	}
 	if rt.Logger == nil {
 		t.Fatal("Logger is nil")
+		return
 	}
 	if rt.MetricsHandler == nil {
 		t.Fatal("MetricsHandler is nil")
+		return
 	}
 	if rt.Shutdown == nil {
 		t.Fatal("Shutdown is nil")
@@ -60,6 +63,7 @@ func TestSetup_metricsEnabled(t *testing.T) {
 	}
 	if rt.MetricsHandler == nil {
 		t.Fatal("MetricsHandler is nil")
+		return
 	}
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()

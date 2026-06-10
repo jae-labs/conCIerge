@@ -54,6 +54,7 @@ func TestStore_Get(t *testing.T) {
 	got := s.Get("ts1")
 	if got == nil {
 		t.Fatal("expected state for ts1")
+		return
 	}
 	if got.Phase != PhaseCategorySelected {
 		t.Errorf("got phase=%v, want PhaseCategorySelected", got.Phase)
