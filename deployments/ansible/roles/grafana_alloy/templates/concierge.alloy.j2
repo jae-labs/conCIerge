@@ -1,0 +1,258 @@
+// Concierge-specific Grafana Alloy Configuration
+// Managed by the concierge repository
+
+{% set prom_ok = grafana_cloud_prometheus_url and grafana_cloud_prometheus_username and grafana_cloud_prometheus_token %}
+{% set tempo_ok = grafana_cloud_tempo_url and grafana_cloud_tempo_username and grafana_cloud_tempo_token %}
+{% set profiles_ok = grafana_cloud_profiles_url and grafana_cloud_profiles_username and grafana_cloud_profiles_token %}
+{% set sentry_traces_ok = concierge_sentry_otlp_trace_url and concierge_sentry_otlp_trace_auth_header %}
+{% set sentry_logs_ok = concierge_sentry_otlp_logs_url and concierge_sentry_otlp_auth_header %}
+{% set honeycomb_ok = honeycomb_api_key %}
+
+discovery.nomad "concierge" {
+  server = "http://127.0.0.1:4646"
+}
+
+discovery.relabel "concierge_metrics" {
+  targets = discovery.nomad.concierge.targets
+
+  rule {
+    source_labels = ["__meta_nomad_service"]
+    regex         = "concierge-metrics"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_nomad_address"]
+    target_label  = "instance"
+  }
+}
+
+{% if prom_ok %}
+// Convert OTel metrics to Prometheus format for Grafana Cloud
+otelcol.exporter.prometheus "concierge_metrics" {
+  forward_to = [prometheus.relabel.add_instance_label.receiver]
+}
+{% endif %}
+
+{% if profiles_ok %}
+// Concierge application profiling (forwarded to base pyroscope receiver)
+pyroscope.scrape "concierge" {
+  targets    = discovery.relabel.concierge_metrics.output
+  forward_to = [pyroscope.write.grafana_cloud_profiles.receiver]
+  profiling_config {
+    profile.process_cpu { enabled = true }
+    profile.memory { enabled = true }
+    profile.goroutine { enabled = true }
+  }
+}
+{% endif %}
+
+// ----------------------------------------------------
+// CONCIERGE DEDICATED OTLP RECEIVER
+// ----------------------------------------------------
+
+otelcol.receiver.otlp "concierge" {
+  grpc {
+    endpoint = "0.0.0.0:4319"
+  }
+  http {
+    endpoint = "0.0.0.0:4320"
+  }
+  output {
+{% if prom_ok or honeycomb_ok %}
+    metrics = concat(
+{% if prom_ok %}
+      [otelcol.exporter.prometheus.concierge_metrics.input],
+{% endif %}
+{% if honeycomb_ok %}
+      [otelcol.exporter.otlp.honeycomb_concierge.input],
+{% endif %}
+    )
+{% endif %}
+{% if tempo_ok or sentry_traces_ok or honeycomb_ok %}
+    traces = [otelcol.processor.tail_sampling.concierge.input]
+{% endif %}
+  }
+}
+
+{% if tempo_ok or sentry_traces_ok or honeycomb_ok %}
+// ----------------------------------------------------
+// TAIL-BASED TRACE SAMPLING PROCESSOR
+// ----------------------------------------------------
+otelcol.processor.tail_sampling "concierge" {
+  decision_wait = "10s"
+
+  policy {
+    name = "error-policy"
+    type = "status_code"
+    status_code {
+      status_codes = ["ERROR"]
+    }
+  }
+
+  policy {
+    name = "latency-policy"
+    type = "latency"
+    latency {
+      threshold_ms = {{ concierge_trace_slow_threshold_ms | default(1000) }}
+    }
+  }
+
+  policy {
+    name = "probabilistic-policy"
+    type = "probabilistic"
+    probabilistic {
+      sampling_percentage = {{ concierge_trace_sample_percentage | default(100) }}
+    }
+  }
+
+  output {
+    traces = concat(
+{% if tempo_ok %}
+      [otelcol.exporter.otlp.grafana_cloud_traces.input],
+{% endif %}
+{% if sentry_traces_ok %}
+      [otelcol.exporter.otlphttp.sentry_traces.input],
+{% endif %}
+{% if honeycomb_ok %}
+      [otelcol.exporter.otlp.honeycomb_concierge.input],
+{% endif %}
+    )
+  }
+}
+{% endif %}
+
+{% if honeycomb_ok %}
+// ----------------------------------------------------
+// HONEYCOMB EXPORTER
+// ----------------------------------------------------
+
+otelcol.exporter.otlp "honeycomb_concierge" {
+  client {
+    endpoint = "api.honeycomb.io:443"
+    headers = {
+      "x-honeycomb-team" = "{{ honeycomb_api_key }}",
+      "x-honeycomb-dataset" = "{{ concierge_honeycomb_dataset | default('concierge') }}",
+    }
+  }
+}
+{% endif %}
+
+{% if sentry_traces_ok %}
+// ----------------------------------------------------
+// SENTRY TRACES EXPORTER
+// ----------------------------------------------------
+
+otelcol.exporter.otlphttp "sentry_traces" {
+  client {
+    endpoint = "{{ concierge_sentry_otlp_trace_url }}"
+    headers = {
+      "x-sentry-auth" = "{{ concierge_sentry_otlp_trace_auth_header | replace('x-sentry-auth=', '') }}",
+    }
+  }
+  traces_endpoint = "{{ concierge_sentry_otlp_trace_url }}"
+}
+{% endif %}
+
+{% if sentry_logs_ok %}
+// ----------------------------------------------------
+// CONCIERGE SENTRY LOGS SCRAPER & EXPORTER
+// ----------------------------------------------------
+
+discovery.docker "concierge_containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "concierge_logs" {
+  targets = discovery.docker.concierge_containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/concierge-.+"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/nomad_init_.+"
+    action        = "drop"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_image"]
+    target_label  = "image"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = "{{ ansible_facts.hostname }}"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_hashicorp_nomad_alloc_id"]
+    target_label  = "nomad_alloc"
+  }
+}
+
+loki.source.docker "concierge_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.concierge_logs.output
+  forward_to = [loki.process.concierge_log_level.receiver]
+}
+
+// Parse JSON log body and promote `level` so otelcol.receiver.loki
+// maps it to OTLP severityText (required for Sentry Logs to index them)
+loki.process "concierge_log_level" {
+  forward_to = [otelcol.receiver.loki.concierge_otel_logs.receiver]
+
+  stage.json {
+    expressions = { level = "level" }
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+}
+
+otelcol.processor.transform "concierge_logs_enrich" {
+  error_mode = "ignore"
+  log_statements {
+    context = "resource"
+    statements = [
+      `set(resource.attributes["service.name"], "concierge")`,
+      `set(resource.attributes["deployment.environment"], "{{ concierge_env.SENTRY_ENVIRONMENT | default('production') }}")`,
+    ]
+  }
+  output {
+    logs = concat(
+{% if sentry_logs_ok %}
+      [otelcol.exporter.otlphttp.sentry_logs.input],
+{% endif %}
+{% if honeycomb_ok %}
+      [otelcol.exporter.otlp.honeycomb_concierge.input],
+{% endif %}
+    )
+  }
+}
+
+otelcol.receiver.loki "concierge_otel_logs" {
+  output {
+    logs = [otelcol.processor.transform.concierge_logs_enrich.input]
+  }
+}
+
+otelcol.exporter.otlphttp "sentry_logs" {
+  client {
+    endpoint = "{{ concierge_sentry_otlp_logs_url }}"
+    headers = {
+      "x-sentry-auth" = "{{ concierge_sentry_otlp_auth_header | replace('x-sentry-auth=', '') }}",
+    }
+  }
+  logs_endpoint = "{{ concierge_sentry_otlp_logs_url }}"
+}
+{% endif %}

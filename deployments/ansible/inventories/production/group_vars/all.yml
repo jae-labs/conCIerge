@@ -1,0 +1,58 @@
+ansible_become: true
+ansible_user: ubuntu
+
+concierge_env_defaults:
+  SLACK_MODE: http
+  SLACK_HTTP_LISTEN_ADDR: 0.0.0.0:8080
+  LOG_LEVEL: "debug"
+  OTEL_SERVICE_NAME: "concierge"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  METRICS_ENABLED: "true"
+  METRICS_LISTEN_ADDR: 0.0.0.0:9090
+  OTEL_METRIC_EXPORT_INTERVAL: "120000"
+
+# All values are sourced from the local operator environment at deploy time.
+concierge_env:
+  SLACK_BOT_TOKEN: "{{ lookup('env', 'CONCIERGE_SLACK_BOT_TOKEN') }}"
+  SLACK_SIGNING_SECRET: "{{ lookup('env', 'CONCIERGE_SLACK_SIGNING_SECRET') }}"
+  SLACK_REQUESTS_CHANNEL_ID: "{{ lookup('env', 'CONCIERGE_SLACK_REQUESTS_CHANNEL_ID') }}"
+  SLACK_USER_IDS: "{{ lookup('env', 'CONCIERGE_SLACK_USER_IDS') }}"
+  SLACK_MANAGER_IDS: "{{ lookup('env', 'CONCIERGE_SLACK_MANAGER_IDS') }}"
+  SLACK_ADMIN_IDS: "{{ lookup('env', 'CONCIERGE_SLACK_ADMIN_IDS') }}"
+  SLACK_APP_TOKEN: "{{ lookup('env', 'CONCIERGE_SLACK_APP_TOKEN') }}"
+  SLACK_MODE: "{{ lookup('env', 'CONCIERGE_SLACK_MODE') }}"
+  GITHUB_APP_ID: "{{ lookup('env', 'CONCIERGE_GH_APP_ID') }}"
+  GITHUB_APP_INSTALLATION_ID: "{{ lookup('env', 'CONCIERGE_GH_APP_INSTALLATION_ID') }}"
+  GITHUB_APP_PRIVATE_KEY: "{{ lookup('env', 'CONCIERGE_GH_APP_PRIVATE_KEY') }}"
+  GITHUB_OWNER: "{{ lookup('env', 'CONCIERGE_GH_OWNER') }}"
+  GITHUB_REPO: "{{ lookup('env', 'CONCIERGE_GH_REPO') }}"
+  OTEL_ENVIRONMENT: "{{ lookup('env', 'OTEL_ENVIRONMENT') }}"
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "{{ lookup('env', 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT') }}"
+  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: "{{ lookup('env', 'OTEL_EXPORTER_OTLP_METRICS_PROTOCOL') }}"
+  SERVICE_VERSION: "{{ lookup('env', 'SERVICE_VERSION') }}"
+  SENTRY_DSN: "{{ lookup('env', 'CONCIERGE_SENTRY_DSN') }}"
+  SENTRY_ENVIRONMENT: "{{ lookup('env', 'SENTRY_ENVIRONMENT') }}"
+  SENTRY_RELEASE: "{{ lookup('env', 'SENTRY_RELEASE') }}"
+
+concierge_sentry_otlp_auth_header: "{{ lookup('env', 'CONCIERGE_SENTRY_OTLP_LOGS_AUTH_HEADER') | default(lookup('env', 'CONCIERGE_SENTRY_OTLP_AUTH_HEADER'), true) | default('', true) }}"
+concierge_sentry_otlp_logs_url: "{{ lookup('env', 'CONCIERGE_SENTRY_OTLP_LOGS_URL') | default('', true) }}"
+concierge_sentry_otlp_trace_auth_header: "{{ lookup('env', 'CONCIERGE_SENTRY_OTLP_TRACE_AUTH_HEADER') | default('', true) }}"
+concierge_sentry_otlp_trace_url: "{{ lookup('env', 'CONCIERGE_SENTRY_OTLP_TRACE_URL') | default('', true) }}"
+
+# Grafana Cloud variables sourced from environment
+grafana_cloud_prometheus_url: "{{ lookup('env', 'GRAFANA_CLOUD_PROMETHEUS_URL') | default('', true) }}"
+grafana_cloud_prometheus_username: "{{ lookup('env', 'GRAFANA_CLOUD_PROMETHEUS_USERNAME') | default('', true) }}"
+grafana_cloud_prometheus_token: "{{ lookup('env', 'GRAFANA_CLOUD_PROMETHEUS_TOKEN') | default('', true) }}"
+
+grafana_cloud_tempo_url: "{{ lookup('env', 'GRAFANA_CLOUD_TEMPO_URL') | default('', true) }}"
+grafana_cloud_tempo_username: "{{ lookup('env', 'GRAFANA_CLOUD_TEMPO_USERNAME') | default('', true) }}"
+grafana_cloud_tempo_token: "{{ lookup('env', 'GRAFANA_CLOUD_TEMPO_TOKEN') | default('', true) }}"
+
+grafana_cloud_profiles_url: "{{ lookup('env', 'GRAFANA_CLOUD_PROFILES_URL') | default('', true) }}"
+grafana_cloud_profiles_username: "{{ lookup('env', 'GRAFANA_CLOUD_PROFILES_USERNAME') | default('', true) }}"
+grafana_cloud_profiles_token: "{{ lookup('env', 'GRAFANA_CLOUD_PROFILES_TOKEN') | default('', true) }}"
+
+honeycomb_api_key: "{{ lookup('env', 'HONEYCOMB_API_KEY') | default('', true) }}"
+
+concierge_trace_sample_percentage: "{{ lookup('env', 'CONCIERGE_TRACE_SAMPLE_PERCENTAGE') | default(100, true) }}"
+concierge_trace_slow_threshold_ms: "{{ lookup('env', 'CONCIERGE_TRACE_SLOW_THRESHOLD_MS') | default(1000, true) }}"

@@ -1,0 +1,517 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "Dockerfile"
+      - "go.mod"
+      - "go.sum"
+      - ".air.toml"
+      - ".dockerignore"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
+      - "deployments/ansible/**"
+      - "deployments/nomad/**"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Honeycomb Buildevents
+        uses: honeycombio/gha-buildevents@1dad608d8534ec0fdf57e7503ceb8256b5ddc531 # ratchet:honeycombio/gha-buildevents@v4.0.0
+        with:
+          apikey: ${{ secrets.HONEYCOMB_API_KEY }}
+          dataset: gha-builds
+          status: ${{ job.status }}
+
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build binary
+        run: |
+          cd cmd/concierge
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} \
+          go build -ldflags="-s -w" -o dist/concierge-linux-${{ matrix.arch }}
+
+      - name: Create tarball
+        run: |
+          cd cmd/concierge/dist
+          tar -czf concierge-linux-${{ matrix.arch }}.tar.gz concierge-linux-${{ matrix.arch }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7.0.1
+        with:
+          name: concierge-linux-${{ matrix.arch }}
+          path: |
+            cmd/concierge/dist/concierge-linux-${{ matrix.arch }}.tar.gz
+            cmd/concierge/dist/concierge-linux-${{ matrix.arch }}
+
+  build-darwin:
+    name: Build macOS
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Honeycomb Buildevents
+        uses: honeycombio/gha-buildevents@1dad608d8534ec0fdf57e7503ceb8256b5ddc531 # ratchet:honeycombio/gha-buildevents@v4.0.0
+        with:
+          apikey: ${{ secrets.HONEYCOMB_API_KEY }}
+          dataset: gha-builds
+          status: ${{ job.status }}
+
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build binary
+        run: |
+          cd cmd/concierge
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.arch }} \
+          go build -ldflags="-s -w" -o dist/concierge-darwin-${{ matrix.arch }}
+
+      - name: Create tarball
+        run: |
+          cd cmd/concierge/dist
+          tar -czf concierge-darwin-${{ matrix.arch }}.tar.gz concierge-darwin-${{ matrix.arch }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7.0.1
+        with:
+          name: concierge-darwin-${{ matrix.arch }}
+          path: |
+            cmd/concierge/dist/concierge-darwin-${{ matrix.arch }}.tar.gz
+            cmd/concierge/dist/concierge-darwin-${{ matrix.arch }}
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-darwin]
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Honeycomb Buildevents
+        uses: honeycombio/gha-buildevents@1dad608d8534ec0fdf57e7503ceb8256b5ddc531 # ratchet:honeycombio/gha-buildevents@v4.0.0
+        with:
+          apikey: ${{ secrets.HONEYCOMB_API_KEY }}
+          dataset: gha-builds
+          status: ${{ job.status }}
+
+      - name: Checkout repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # ratchet:actions/download-artifact@v8.0.1
+        with:
+          path: artifacts
+
+      - name: Organize release files
+        run: |
+          mkdir -p dist
+          find artifacts -name "*.tar.gz" -exec cp {} dist/ \;
+          find artifacts -name "concierge-*" -type f ! -name "*.tar.gz" -exec cp {} dist/ \;
+          ls -lh dist/
+
+      - name: Generate version tag
+        id: tag
+        run: |
+          git fetch --tags --force || true
+
+          LATEST_TAG=$(git tag -l "v*.*.*" --sort=-v:refname | head -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_VERSION="v0.0.1"
+            echo "No previous tag found, creating initial version: $NEW_VERSION"
+          else
+            VERSION=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            echo "Incrementing from $LATEST_TAG to $NEW_VERSION"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LATEST_TAG=$(git tag -l "v*.*.*" --sort=-v:refname | head -n 1)
+
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          if [ -z "$LATEST_TAG" ]; then
+            echo "Initial release" >> $GITHUB_OUTPUT
+          else
+            git log --oneline --no-decorate ${LATEST_TAG}..HEAD >> $GITHUB_OUTPUT 2>/dev/null || echo "No changes since last release" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create versioned GitHub release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # ratchet:softprops/action-gh-release@v3.0.0
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: ${{ steps.tag.outputs.version }}
+          body: |
+            ## What's Changed
+            ${{ steps.changelog.outputs.changelog }}
+          files: dist/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-image:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [release]
+    steps:
+      - name: Honeycomb Buildevents
+        uses: honeycombio/gha-buildevents@1dad608d8534ec0fdf57e7503ceb8256b5ddc531 # ratchet:honeycombio/gha-buildevents@v4.0.0
+        with:
+          apikey: ${{ secrets.HONEYCOMB_API_KEY }}
+          dataset: gha-builds
+          status: ${{ job.status }}
+
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # ratchet:actions/download-artifact@v8.0.1
+        with:
+          path: dist
+
+      - name: Move binaries to build context root
+        run: |
+          mv dist/concierge-linux-amd64/concierge-linux-amd64 .
+          mv dist/concierge-linux-arm64/concierge-linux-arm64 .
+          chmod +x concierge-linux-amd64 concierge-linux-arm64
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # ratchet:docker/setup-qemu-action@v4.1.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # ratchet:docker/setup-buildx-action@v4.1.0
+
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # ratchet:docker/login-action@v4.2.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME}}
+          password: ${{ secrets.DHI_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # ratchet:docker/login-action@v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # ratchet:docker/build-push-action@v7.2.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/jae-labs/concierge:${{ needs.release.outputs.version }}
+            ghcr.io/jae-labs/concierge:latest
+
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [release, docker-image]
+    environment: production
+    concurrency:
+      group: concierge-deploy-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Honeycomb Buildevents
+        uses: honeycombio/gha-buildevents@1dad608d8534ec0fdf57e7503ceb8256b5ddc531 # ratchet:honeycombio/gha-buildevents@v4.0.0
+        with:
+          apikey: ${{ secrets.HONEYCOMB_API_KEY }}
+          dataset: gha-builds
+          status: ${{ job.status }}
+
+      - name: Checkout repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+
+      - name: Connect runner to Tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # ratchet:tailscale/github-action@v4.1.2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_CI_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_CI_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
+          hostname: gha-concierge-release
+
+      - name: Install Ansible
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user -r deployments/ansible/requirements.txt
+
+      - name: Add local Python bin to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Bootstrap Ansible dependencies
+        run: |
+          bash deployments/ansible/bootstrap.sh
+
+      - name: Configure OCI auth
+        run: |
+          mkdir -p "$HOME/.oci"
+          printf '%s' "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/oci_api_key.pem"
+          {
+            printf '[DEFAULT]\n'
+            printf 'user=%s\n' "$OCI_USER_OCID"
+            printf 'fingerprint=%s\n' "$OCI_FINGERPRINT"
+            printf 'tenancy=%s\n' "$OCI_TENANCY_OCID"
+            printf 'region=%s\n' "$OCI_REGION"
+            printf 'key_file=%s/.oci/oci_api_key.pem\n' "$HOME"
+            if [ -n "${OCI_PRIVATE_KEY_PASSPHRASE:-}" ]; then
+              printf 'pass_phrase=%s\n' "$OCI_PRIVATE_KEY_PASSPHRASE"
+            fi
+          } > "$HOME/.oci/config"
+          chmod 600 "$HOME/.oci/config"
+        env:
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_PRIVATE_KEY_PASSPHRASE: ${{ secrets.OCI_PRIVATE_KEY_PASSPHRASE }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+        env:
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+
+      - name: Prepare deploy variables
+        id: deploy-vars
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "concierge_image_tag": os.environ["IMAGE_TAG"],
+              "concierge_env": {
+                  "SLACK_BOT_TOKEN": os.environ["CONCIERGE_SLACK_BOT_TOKEN"],
+                  "SLACK_SIGNING_SECRET": os.environ["CONCIERGE_SLACK_SIGNING_SECRET"],
+                  "SLACK_REQUESTS_CHANNEL_ID": os.environ["CONCIERGE_SLACK_REQUESTS_CHANNEL_ID"],
+                  "SLACK_USER_IDS": os.environ["CONCIERGE_SLACK_USER_IDS"],
+                  "SLACK_MANAGER_IDS": os.environ["CONCIERGE_SLACK_MANAGER_IDS"],
+                  "SLACK_ADMIN_IDS": os.environ["CONCIERGE_SLACK_ADMIN_IDS"],
+                  "GITHUB_APP_ID": os.environ["CONCIERGE_GH_APP_ID"],
+                  "GITHUB_APP_INSTALLATION_ID": os.environ["CONCIERGE_GH_APP_INSTALLATION_ID"],
+                  "GITHUB_APP_PRIVATE_KEY": os.environ["CONCIERGE_GH_APP_PRIVATE_KEY"],
+                  "GITHUB_OWNER": os.environ["CONCIERGE_GH_OWNER"],
+                  "GITHUB_REPO": os.environ["CONCIERGE_GH_REPO"],
+                  "OTEL_ENVIRONMENT": os.environ["OTEL_ENVIRONMENT"],
+                  "SERVICE_VERSION": os.environ["SERVICE_VERSION"],
+                  "SENTRY_DSN": os.environ["CONCIERGE_SENTRY_DSN"],
+                  "SENTRY_ENVIRONMENT": os.environ["SENTRY_ENVIRONMENT"],
+                  "SENTRY_RELEASE": os.environ["SENTRY_RELEASE"],
+              },
+          }
+
+          vars_file = Path(os.environ["RUNNER_TEMP"]) / "concierge-deploy-vars.json"
+          vars_file.write_text(json.dumps(payload))
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"vars_file={vars_file}\n")
+          PY
+        env:
+          IMAGE_TAG: ${{ needs.release.outputs.version }}
+          CONCIERGE_SLACK_BOT_TOKEN: ${{ secrets.CONCIERGE_SLACK_BOT_TOKEN }}
+          CONCIERGE_SLACK_SIGNING_SECRET: ${{ secrets.CONCIERGE_SLACK_SIGNING_SECRET }}
+          CONCIERGE_SLACK_REQUESTS_CHANNEL_ID: ${{ secrets.CONCIERGE_SLACK_REQUESTS_CHANNEL_ID }}
+          CONCIERGE_SLACK_USER_IDS: ${{ secrets.CONCIERGE_SLACK_USER_IDS }}
+          CONCIERGE_SLACK_MANAGER_IDS: ${{ secrets.SLACK_MANAGER_IDS }}
+          CONCIERGE_SLACK_ADMIN_IDS: ${{ secrets.SLACK_ADMIN_IDS }}
+          CONCIERGE_GH_APP_ID: ${{ secrets.CONCIERGE_GH_APP_ID }}
+          CONCIERGE_GH_APP_INSTALLATION_ID: ${{ secrets.CONCIERGE_GH_APP_INSTALLATION_ID }}
+          CONCIERGE_GH_APP_PRIVATE_KEY: ${{ secrets.CONCIERGE_GH_APP_PRIVATE_KEY }}
+          CONCIERGE_GH_OWNER: ${{ secrets.CONCIERGE_GH_OWNER }}
+          CONCIERGE_GH_REPO: ${{ secrets.CONCIERGE_GH_REPO }}
+          OTEL_ENVIRONMENT: production
+          SERVICE_VERSION: ${{ needs.release.outputs.version }}
+          CONCIERGE_SENTRY_DSN: ${{ secrets.CONCIERGE_SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: production
+          SENTRY_RELEASE: ${{ needs.release.outputs.version }}
+
+      - name: Ansible syntax check
+        run: |
+          cd deployments/ansible
+          ansible-playbook -i inventories/production/oci.oci.yml playbooks/webservers.yml --syntax-check --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+        env:
+          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.TF_VAR_SSH_INGRESS_CIDR }}
+          GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_URL }}
+          GRAFANA_CLOUD_PROMETHEUS_USERNAME: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_USERNAME }}
+          GRAFANA_CLOUD_PROMETHEUS_TOKEN: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_TOKEN }}
+          GRAFANA_CLOUD_LOKI_URL: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          GRAFANA_CLOUD_LOKI_USERNAME: ${{ secrets.GRAFANA_CLOUD_LOKI_USERNAME }}
+          GRAFANA_CLOUD_LOKI_TOKEN: ${{ secrets.GRAFANA_CLOUD_LOKI_TOKEN }}
+          GRAFANA_CLOUD_TEMPO_URL: ${{ secrets.GRAFANA_CLOUD_TEMPO_URL }}
+          GRAFANA_CLOUD_TEMPO_USERNAME: ${{ secrets.GRAFANA_CLOUD_TEMPO_USERNAME }}
+          GRAFANA_CLOUD_TEMPO_TOKEN: ${{ secrets.GRAFANA_CLOUD_TEMPO_TOKEN }}
+          GRAFANA_CLOUD_PROFILES_URL: ${{ secrets.GRAFANA_CLOUD_PROFILES_URL }}
+          GRAFANA_CLOUD_PROFILES_USERNAME: ${{ secrets.GRAFANA_CLOUD_PROFILES_USERNAME }}
+          GRAFANA_CLOUD_PROFILES_TOKEN: ${{ secrets.GRAFANA_CLOUD_PROFILES_TOKEN }}
+          HONEYCOMB_API_KEY: ${{ secrets.HONEYCOMB_API_KEY }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          CONCIERGE_SENTRY_DSN: ${{ secrets.CONCIERGE_SENTRY_DSN }}
+          CONCIERGE_SENTRY_OTLP_AUTH_HEADER: ${{ secrets.CONCIERGE_SENTRY_OTLP_AUTH_HEADER }}
+          CONCIERGE_SENTRY_OTLP_LOGS_AUTH_HEADER: ${{ secrets.CONCIERGE_SENTRY_OTLP_LOGS_AUTH_HEADER }}
+          CONCIERGE_SENTRY_OTLP_LOGS_URL: ${{ secrets.CONCIERGE_SENTRY_OTLP_LOGS_URL }}
+          CONCIERGE_SENTRY_OTLP_TRACE_AUTH_HEADER: ${{ secrets.CONCIERGE_SENTRY_OTLP_TRACE_AUTH_HEADER }}
+          CONCIERGE_SENTRY_OTLP_TRACE_URL: ${{ secrets.CONCIERGE_SENTRY_OTLP_TRACE_URL }}
+          SENTRY_ENVIRONMENT: production
+          SENTRY_RELEASE: ${{ needs.release.outputs.version }}
+
+      - name: Deploy released binary to OCI
+        run: |
+          cd deployments/ansible
+          ansible-playbook -i inventories/production/oci.oci.yml playbooks/webservers.yml --private-key="$HOME/.ssh/id_ed25519" --ssh-common-args="-o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" -e @"${{ steps.deploy-vars.outputs.vars_file }}"
+        env:
+          TF_VAR_SSH_INGRESS_CIDR: ${{ secrets.TF_VAR_SSH_INGRESS_CIDR }}
+          GRAFANA_CLOUD_PROMETHEUS_URL: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_URL }}
+          GRAFANA_CLOUD_PROMETHEUS_USERNAME: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_USERNAME }}
+          GRAFANA_CLOUD_PROMETHEUS_TOKEN: ${{ secrets.GRAFANA_CLOUD_PROMETHEUS_TOKEN }}
+          GRAFANA_CLOUD_LOKI_URL: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          GRAFANA_CLOUD_LOKI_USERNAME: ${{ secrets.GRAFANA_CLOUD_LOKI_USERNAME }}
+          GRAFANA_CLOUD_LOKI_TOKEN: ${{ secrets.GRAFANA_CLOUD_LOKI_TOKEN }}
+          GRAFANA_CLOUD_TEMPO_URL: ${{ secrets.GRAFANA_CLOUD_TEMPO_URL }}
+          GRAFANA_CLOUD_TEMPO_USERNAME: ${{ secrets.GRAFANA_CLOUD_TEMPO_USERNAME }}
+          GRAFANA_CLOUD_TEMPO_TOKEN: ${{ secrets.GRAFANA_CLOUD_TEMPO_TOKEN }}
+          GRAFANA_CLOUD_PROFILES_URL: ${{ secrets.GRAFANA_CLOUD_PROFILES_URL }}
+          GRAFANA_CLOUD_PROFILES_USERNAME: ${{ secrets.GRAFANA_CLOUD_PROFILES_USERNAME }}
+          GRAFANA_CLOUD_PROFILES_TOKEN: ${{ secrets.GRAFANA_CLOUD_PROFILES_TOKEN }}
+          HONEYCOMB_API_KEY: ${{ secrets.HONEYCOMB_API_KEY }}
+          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          CONCIERGE_SENTRY_DSN: ${{ secrets.CONCIERGE_SENTRY_DSN }}
+          CONCIERGE_SENTRY_OTLP_AUTH_HEADER: ${{ secrets.CONCIERGE_SENTRY_OTLP_AUTH_HEADER }}
+          CONCIERGE_SENTRY_OTLP_LOGS_AUTH_HEADER: ${{ secrets.CONCIERGE_SENTRY_OTLP_LOGS_AUTH_HEADER }}
+          CONCIERGE_SENTRY_OTLP_LOGS_URL: ${{ secrets.CONCIERGE_SENTRY_OTLP_LOGS_URL }}
+          CONCIERGE_SENTRY_OTLP_TRACE_AUTH_HEADER: ${{ secrets.CONCIERGE_SENTRY_OTLP_TRACE_AUTH_HEADER }}
+          CONCIERGE_SENTRY_OTLP_TRACE_URL: ${{ secrets.CONCIERGE_SENTRY_OTLP_TRACE_URL }}
+          SENTRY_ENVIRONMENT: production
+          SENTRY_RELEASE: ${{ needs.release.outputs.version }}
+
+      - name: Verify deployed service
+        run: |
+          cd deployments/ansible
+
+          # Verify Nomad allocation is running
+          echo "Checking Nomad allocation status for concierge..."
+          alloc_status=$(
+            ansible all -i inventories/production/oci.oci.yml -m shell \
+              -a "nomad job allocs -json concierge | jq -r '.[0].ClientStatus // empty'" \
+              --private-key="$HOME/.ssh/id_ed25519" \
+              --ssh-common-args="-o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" |
+            tail -n 1 | tr -d '\r'
+          )
+
+          echo "Nomad allocation status: $alloc_status"
+          if [ "$alloc_status" != "running" ]; then
+            echo "ERROR: Nomad allocation is not running (status: $alloc_status)"
+            exit 1
+          fi
+          echo "Nomad allocation verified as running."
+
+          ts=$(date +%s)
+          body='{"type":"url_verification","token":"token","challenge":"workflow-probe"}'
+          sig=$(printf 'v0:%s:%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$SLACK_SIGNING_SECRET" -hex | awk '{print $2}')
+
+          echo "Waiting for concierge service to start and be healthy..."
+          success=false
+          for i in {1..60}; do
+            response=$(curl -qsk -X POST https://oci-prod-1.justanother.engineer/slack/events \
+              -H 'Content-Type: application/json' \
+              -H "X-Slack-Request-Timestamp: $ts" \
+              -H "X-Slack-Signature: v0=$sig" \
+              --data "$body")
+            if [ "$response" = '{"challenge":"workflow-probe"}' ]; then
+              echo "Service verified successfully!"
+              success=true
+              break
+            fi
+            echo "Attempt $i/60: service not ready yet. Retrying in 1s..."
+            sleep 1
+          done
+
+          if [ "$success" = false ]; then
+            echo "Timeout: concierge service did not become healthy in 60s"
+            exit 1
+          fi
+        env:
+          SLACK_SIGNING_SECRET: ${{ secrets.CONCIERGE_SLACK_SIGNING_SECRET }}
+
+      - name: Cleanup deploy credentials
+        if: always()
+        run: |
+          rm -f "$HOME/.oci/config" "$HOME/.oci/oci_api_key.pem"
+          rm -f "$HOME/.ssh/id_ed25519"
+          rm -f "${{ steps.deploy-vars.outputs.vars_file }}"
+
+      - name: Update latest tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest
+          git push origin -f latest
+
+      - name: Delete existing latest release
+        uses: dev-drprasad/delete-tag-and-release@82600feb9527126eca69833f07bafe53279bd9b4 # ratchet:dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: latest
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Create latest release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # ratchet:softprops/action-gh-release@v3.0.0
+        with:
+          tag_name: latest
+          name: "Latest"
+          body: |
+            ## Latest
+
+            This is an automatically generated release from the latest `main` branch.
+          files: dist/*
+          prerelease: false
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

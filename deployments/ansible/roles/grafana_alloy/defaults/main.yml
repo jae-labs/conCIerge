@@ -1,0 +1,24 @@
+---
+# Defaults for concierge grafana_alloy role
+grafana_cloud_prometheus_url: ""
+grafana_cloud_prometheus_username: ""
+grafana_cloud_prometheus_token: ""
+
+grafana_cloud_profiles_url: ""
+grafana_cloud_profiles_username: ""
+grafana_cloud_profiles_token: ""
+
+# Honeycomb integration
+honeycomb_api_key: "{{ lookup('env', 'HONEYCOMB_API_KEY') | default('', true) }}"
+
+grafana_cloud_tempo_url: ""
+grafana_cloud_tempo_username: ""
+grafana_cloud_tempo_token: ""
+
+concierge_sentry_otlp_auth_header: ""
+concierge_sentry_otlp_logs_url: ""
+concierge_sentry_otlp_trace_auth_header: ""
+concierge_sentry_otlp_trace_url: ""
+
+concierge_trace_sample_percentage: 1
+concierge_trace_slow_threshold_ms: 1000

@@ -1,0 +1,25 @@
+# Lefthook Git Hooks
+# https://github.com/evilmartians/lefthook
+#
+# Tool versions are pinned via mise (see mise.toml).
+
+pre-commit:
+  parallel: false
+  commands:
+    go-fmt:
+      glob: "**/*.go"
+      run: gofmt -w {staged_files}
+    go-lint:
+      glob: "**/*.go"
+      run: golangci-lint run --timeout=5m
+    ansible-lint:
+      glob: "deployments/ansible/**"
+      env:
+        ANSIBLE_ROLES_PATH: deployments/ansible/roles
+      run: ansible-lint -c deployments/ansible/.ansible-lint
+
+pre-push:
+  commands:
+    go-test:
+      glob: "**/*.go"
+      run: go test -v -race ./...
